@@ -33,3 +33,15 @@ def menu(message):
         bot.send_message(message.chat.id, "💎 Premium :\nAccès aux prédictions avancées et aux compatibilités détaillées.")
 
 bot.polling()
+import os
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
