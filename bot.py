@@ -32,7 +32,9 @@ def menu(message):
     elif message.text == "💎 Mode Premium":
         bot.send_message(message.chat.id, "💎 Premium :\nAccès aux prédictions avancées et aux compatibilités détaillées.")
 
-bot.polling()
+import threading
+threading.Thread(target=bot.infinity_polling).start()
+
 import os
 from flask import Flask
 
