@@ -325,6 +325,7 @@ SIGNS = [
     "♒ Verseau",
     "♓ Poissons"
 ]
+compatibility_requests = set()
 
 
 # ==================================================
@@ -410,24 +411,61 @@ def start(message):
 # CHOIX DU SIGNE
 # ==================================================
 
-@bot.message_handler(
+
+    @bot.message_handler(
     func=lambda message: message.text in SIGNS
 )
 def choose_sign(message):
     create_or_update_user(message)
 
+    user_id = message.from_user.id
+
+    if user_id in compatibility_requests:
+        compatibility_requests.discard(user_id)
+
+        first_sign = get_user_sign(user_id)
+        second_sign = message.text
+
+        if not first_sign:
+            bot.send_message(
+                message.chat.id,
+                "✨ Je dois d'abord connaître ton signe astrologique.",
+                reply_markup=signs_menu()
+            )
+            return
+
+        compatibility = generate_compatibility(
+            first_sign,
+            second_sign
+        )
+
+        if not compatibility:
+            bot.send_message(
+                message.chat.id,
+                "Une erreur est survenue pendant la préparation "
+                "de ta compatibilité."
+            )
+            return
+
+        bot.send_message(
+            message.chat.id,
+            compatibility,
+            reply_markup=main_menu()
+        )
+        return
+
     save_user_sign(
-        message.from_user.id,
+        user_id,
         message.text
     )
 
     bot.send_message(
         message.chat.id,
-        f"✅ Ton signe est enregistré : "
-        f"{message.text}\n\n"
+        f"✅ Ton signe est enregistré : {message.text}\n\n"
         "Bienvenue dans ton univers AstroVibe ✨",
         reply_markup=main_menu()
     )
+
 
 
 # ==================================================
@@ -626,14 +664,30 @@ def menu(message):
     if message.text == "🔮 Horoscope du jour":
         show_horoscope(message)
 
-    elif message.text == "❤️ Compatibilité amoureuse":
+    
+elif message.text == "❤️ Compatibilité amoureuse":
+    create_or_update_user(message)
+
+    user_id = message.from_user.id
+    first_sign = get_user_sign(user_id)
+
+    if not first_sign:
         bot.send_message(
             message.chat.id,
-            "❤️ Compatibilité amoureuse\n\n"
-            "Cette fonctionnalité sera détaillée "
-            "et personnalisée.\n\n"
-            "Elle arrive dans une prochaine étape."
+            "✨ Je dois d'abord connaître ton signe astrologique.",
+            reply_markup=signs_menu()
         )
+        return
+
+    compatibility_requests.add(user_id)
+
+    bot.send_message(
+        message.chat.id,
+        "❤️ Compatibilité amoureuse\n\n"
+        f"Ton signe : {first_sign}\n\n"
+        "Choisis maintenant le signe de l'autre personne :",
+        reply_markup=signs_menu()
+    )
 
     elif message.text == "⭐ Bonus quotidien":
         show_daily_bonus(message)
