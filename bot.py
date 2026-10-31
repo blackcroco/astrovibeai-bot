@@ -164,10 +164,10 @@ def get_user_language(user_id):
 
             result = cursor.fetchone()
 
-if result:
-    return result[0]
+    if result:
+        return result[0]
 
-return "fr"
+    return "fr"
 
 
 
@@ -368,31 +368,49 @@ compatibility_requests = set()
 # MENUS
 # ==================================================
 
-def main_menu():
+def main_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True
     )
 
     markup.row(
         types.KeyboardButton(
-            "🔮 Horoscope du jour"
+            get_text(language, "horoscope_button")
         ),
         types.KeyboardButton(
-            "❤️ Compatibilité amoureuse"
+            get_text(language, "compatibility_button")
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            "⭐ Bonus quotidien"
+            get_text(language, "bonus_button")
         ),
         types.KeyboardButton(
-            "💎 Mode Premium"
+            get_text(language, "premium_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "language_button")
         )
     )
 
     return markup
 
+def language_menu():
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton("🇫🇷 Français"),
+        types.KeyboardButton("🇬🇧 English")
+    )
+
+    return markup
 
 def signs_menu():
     markup = types.ReplyKeyboardMarkup(
@@ -423,24 +441,38 @@ def start(message):
 
     user_id = message.from_user.id
     sign = get_user_sign(user_id)
+    language = get_user_language(user_id)
 
     if not sign:
         bot.send_message(
             message.chat.id,
-            "✨ Bienvenue dans AstroVibe ✨\n\n"
-            "Pour commencer, quel est ton signe "
-            "astrologique ?",
+            get_text(
+                language,
+                "choose_sign"
+            ),
             reply_markup=signs_menu()
         )
         return
 
     bot.send_message(
         message.chat.id,
-        "✨ Bienvenue dans AstroVibe ✨\n\n"
-        f"Ton signe : {sign}\n\n"
-        "Que souhaites-tu découvrir aujourd'hui ?",
-        reply_markup=main_menu()
+        (
+            get_text(language, "welcome")
+            + "\n\n"
+            + get_text(
+                language,
+                "your_sign",
+                sign=sign
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "what_today"
+            )
+        ),
+        reply_markup=main_menu(language)
     )
+
 
 
 # ==================================================
@@ -688,6 +720,35 @@ def show_daily_bonus(message):
 @bot.message_handler(commands=["bonus"])
 def bonus_command(message):
     show_daily_bonus(message)
+@bot.message_handler(
+    func=lambda message: message.text in (
+        "🇫🇷 Français",
+        "🇬🇧 English"
+    )
+)
+def choose_language(message):
+    create_or_update_user(message)
+
+    user_id = message.from_user.id
+
+    if message.text == "🇬🇧 English":
+        language = "en"
+    else:
+        language = "fr"
+
+    save_user_language(
+        user_id,
+        language
+    )
+
+    bot.send_message(
+        message.chat.id,
+        get_text(
+            language,
+            "language_saved"
+        ),
+        reply_markup=main_menu(language)
+    )
 
 
 # ==================================================
@@ -696,20 +757,49 @@ def bonus_command(message):
 
 @bot.message_handler(func=lambda message: True)
 def menu(message):
+    create_or_update_user(message)
 
-    if message.text == "🔮 Horoscope du jour":
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    horoscope_buttons = (
+        "🔮 Horoscope du jour",
+        "🔮 Daily Horoscope"
+    )
+
+    compatibility_buttons = (
+        "❤️ Compatibilité amoureuse",
+        "❤️ Love Compatibility"
+    )
+
+    bonus_buttons = (
+        "⭐ Bonus quotidien",
+        "⭐ Daily Bonus"
+    )
+
+    premium_buttons = (
+        "💎 Mode Premium",
+        "💎 Premium"
+    )
+
+    language_buttons = (
+        "🌍 Langue",
+        "🌍 Language"
+    )
+
+    if message.text in horoscope_buttons:
         show_horoscope(message)
 
-    elif message.text == "❤️ Compatibilité amoureuse":
-        create_or_update_user(message)
-
-        user_id = message.from_user.id
+    elif message.text in compatibility_buttons:
         first_sign = get_user_sign(user_id)
 
         if not first_sign:
             bot.send_message(
                 message.chat.id,
-                "✨ Je dois d'abord connaître ton signe astrologique.",
+                get_text(
+                    language,
+                    "need_sign"
+                ),
                 reply_markup=signs_menu()
             )
             return
@@ -718,31 +808,48 @@ def menu(message):
 
         bot.send_message(
             message.chat.id,
-            "❤️ Compatibilité amoureuse\n\n"
-            f"Ton signe : {first_sign}\n\n"
-            "Choisis maintenant le signe de l'autre personne :",
+            get_text(
+                language,
+                "choose_partner_sign",
+                sign=first_sign
+            ),
             reply_markup=signs_menu()
         )
 
-
-    elif message.text == "⭐ Bonus quotidien":
+    elif message.text in bonus_buttons:
         show_daily_bonus(message)
 
-    elif message.text == "💎 Mode Premium":
+    elif message.text in premium_buttons:
         bot.send_message(
             message.chat.id,
-            "💎 AstroVibe Premium\n\n"
-            "Les fonctionnalités Premium "
-            "arrivent bientôt."
+            (
+                get_text(language, "premium_title")
+                + "\n\n"
+                + get_text(language, "premium_coming")
+            ),
+            reply_markup=main_menu(language)
+        )
+
+    elif message.text in language_buttons:
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "language_title"
+            ),
+            reply_markup=language_menu()
         )
 
     else:
         bot.send_message(
             message.chat.id,
-            "Je n'ai pas reconnu cette demande.\n\n"
-            "Choisis une option dans le menu ✨",
-            reply_markup=main_menu()
+            get_text(
+                language,
+                "unknown_request"
+            ),
+            reply_markup=main_menu(language)
         )
+
 
 
 # ==================================================
