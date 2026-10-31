@@ -412,7 +412,7 @@ def start(message):
 # ==================================================
 
 
-    @bot.message_handler(
+@bot.message_handler(
     func=lambda message: message.text in SIGNS
 )
 def choose_sign(message):
