@@ -664,30 +664,30 @@ def menu(message):
     if message.text == "🔮 Horoscope du jour":
         show_horoscope(message)
 
-    
-elif message.text == "❤️ Compatibilité amoureuse":
-    create_or_update_user(message)
+    elif message.text == "❤️ Compatibilité amoureuse":
+        create_or_update_user(message)
 
-    user_id = message.from_user.id
-    first_sign = get_user_sign(user_id)
+        user_id = message.from_user.id
+        first_sign = get_user_sign(user_id)
 
-    if not first_sign:
+        if not first_sign:
+            bot.send_message(
+                message.chat.id,
+                "✨ Je dois d'abord connaître ton signe astrologique.",
+                reply_markup=signs_menu()
+            )
+            return
+
+        compatibility_requests.add(user_id)
+
         bot.send_message(
             message.chat.id,
-            "✨ Je dois d'abord connaître ton signe astrologique.",
+            "❤️ Compatibilité amoureuse\n\n"
+            f"Ton signe : {first_sign}\n\n"
+            "Choisis maintenant le signe de l'autre personne :",
             reply_markup=signs_menu()
         )
-        return
 
-    compatibility_requests.add(user_id)
-
-    bot.send_message(
-        message.chat.id,
-        "❤️ Compatibilité amoureuse\n\n"
-        f"Ton signe : {first_sign}\n\n"
-        "Choisis maintenant le signe de l'autre personne :",
-        reply_markup=signs_menu()
-    )
 
     elif message.text == "⭐ Bonus quotidien":
         show_daily_bonus(message)
