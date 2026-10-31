@@ -7,6 +7,7 @@ import telebot
 from flask import Flask
 from telebot import types
 from horoscope_engine import generate_daily_horoscope
+from compatibility_engine import generate_compatibility
 
 
 
