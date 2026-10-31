@@ -8,6 +8,7 @@ from flask import Flask
 from telebot import types
 from horoscope_engine import generate_daily_horoscope
 from compatibility_engine import generate_compatibility
+from translations import get_text
 
 
 
@@ -149,6 +150,41 @@ def save_user_sign(user_id, sign):
                 user_id
             ))
 
+def get_user_language(user_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT language
+                FROM users
+                WHERE telegram_id = %s
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+if result:
+    return result[0]
+
+return "fr"
+
+
+
+def save_user_language(user_id, language):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET language = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    language,
+                    user_id
+                )
+            )
 
 def calculate_level(points):
     if points >= 1000:
