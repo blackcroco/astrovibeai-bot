@@ -6,6 +6,8 @@ import psycopg2
 import telebot
 from flask import Flask
 from telebot import types
+from horoscope_engine import generate_daily_horoscope
+
 
 
 # ==================================================
@@ -447,13 +449,20 @@ def show_horoscope(message):
         )
         return
 
+    horoscope = generate_daily_horoscope(sign)
+
+    if not horoscope:
+        bot.send_message(
+            message.chat.id,
+            "Une erreur est survenue pendant la "
+            "préparation de ton horoscope."
+        )
+        return
+
     bot.send_message(
         message.chat.id,
-        "🔮 Horoscope du jour\n\n"
-        f"{sign}\n\n"
-        "✨ Ton horoscope personnalisé arrive bientôt.\n\n"
-        "Cette fonctionnalité fera l'objet d'un moteur "
-        "détaillé, varié et premium."
+        horoscope,
+        reply_markup=main_menu()
     )
 
 
