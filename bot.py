@@ -974,7 +974,7 @@ def menu(message):
         "❤️ Love Compatibility"
     )
 
-            bonus_buttons = (
+    bonus_buttons = (
         "⭐ Bonus quotidien",
         "⭐ Daily Bonus"
     )
