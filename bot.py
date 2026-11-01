@@ -407,17 +407,21 @@ def main_menu(language="fr"):
             get_text(language, "bonus_button")
         ),
         types.KeyboardButton(
-            get_text(language, "premium_button")
+            get_text(language, "points_button")
         )
     )
 
     markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_button")
+        ),
         types.KeyboardButton(
             get_text(language, "language_button")
         )
     )
 
     return markup
+
 
 def language_menu():
     markup = types.ReplyKeyboardMarkup(
@@ -973,6 +977,11 @@ def menu(message):
     bonus_buttons = (
         "⭐ Bonus quotidien",
         "⭐ Daily Bonus"
+        points_buttons = (
+    "🏆 Mes points",
+    "🏆 My Points"
+)
+
     )
 
     premium_buttons = (
@@ -1029,6 +1038,8 @@ def menu(message):
 
     elif message.text in bonus_buttons:
         show_daily_bonus(message)
+    elif message.text in points_buttons:
+    show_points(message)
 
     elif message.text in premium_buttons:
         bot.send_message(
