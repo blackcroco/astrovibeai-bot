@@ -661,6 +661,9 @@ def points_command(message):
 
 def show_daily_bonus(message):
     create_or_update_user(message)
+language = get_user_language(
+    message.from_user.id
+)
 
     result = claim_daily_bonus(
         message.from_user.id
