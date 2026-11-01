@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg2
 import telebot
-from flask import Flask
+from flask import Flask, request
+
 from telebot import types
 from horoscope_engine import generate_daily_horoscope
 from compatibility_engine import generate_compatibility
@@ -863,18 +864,7 @@ init_database()
 # TELEGRAM
 # ==================================================
 
-def run_telegram_bot():
-    bot.infinity_polling(
-        skip_pending=True,
-        timeout=30,
-        long_polling_timeout=30
-    )
 
-
-threading.Thread(
-    target=run_telegram_bot,
-    daemon=True
-).start()
 
 
 # ==================================================
@@ -882,6 +872,25 @@ threading.Thread(
 # ==================================================
 
 app = Flask(__name__)
+WEBHOOK_URL = "https://astrovibeai-bot.onrender.com/webhook"
+
+
+@app.route("/webhook", methods=["POST"])
+def telegram_webhook():
+    if request.headers.get("content-type") == "application/json":
+        json_string = request.get_data().decode("utf-8")
+
+        update = telebot.types.Update.de_json(
+            json_string
+        )
+
+        bot.process_new_updates(
+            [update]
+        )
+
+        return "OK", 200
+
+    return "Invalid content type", 403
 
 
 @app.route("/")
@@ -896,8 +905,16 @@ def health():
         "service": "AstroVibe"
     }
 
-
 if __name__ == "__main__":
+    bot.set_webhook(
+        url=WEBHOOK_URL,
+        drop_pending_updates=True
+    )
+
+    print(
+        f"Webhook Telegram actif : {WEBHOOK_URL}"
+    )
+
     port = int(
         os.environ.get(
             "PORT",
@@ -909,3 +926,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port
     )
+
+
