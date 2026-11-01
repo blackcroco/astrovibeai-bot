@@ -441,6 +441,51 @@ def settings_menu(language="fr"):
     )
 
     return markup
+def premium_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_daily_button")
+        ),
+        types.KeyboardButton(
+            get_text(language, "premium_week_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_month_button")
+        ),
+        types.KeyboardButton(
+            get_text(language, "premium_year_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_compatibility_button")
+        ),
+        types.KeyboardButton(
+            get_text(language, "premium_morning_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_subscription_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "back_button")
+        )
+    )
+
+    return markup
 
 def language_menu():
     markup = types.ReplyKeyboardMarkup(
@@ -1073,15 +1118,22 @@ def menu(message):
         show_points(message)
 
     elif message.text in premium_buttons:
-        bot.send_message(
-            message.chat.id,
-            (
-                get_text(language, "premium_title")
-                + "\n\n"
-                + get_text(language, "premium_coming")
-            ),
-            reply_markup=main_menu(language)
-        )
+    bot.send_message(
+        message.chat.id,
+        (
+            get_text(
+                language,
+                "premium_menu_title"
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "premium_menu_intro"
+            )
+        ),
+        reply_markup=premium_menu(language)
+    )
+
     elif message.text in settings_buttons:
         bot.send_message(
             message.chat.id,
