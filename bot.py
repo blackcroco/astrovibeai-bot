@@ -11,6 +11,8 @@ from horoscope_engine import generate_daily_horoscope
 from horoscope_engine_en import generate_daily_horoscope_en
 
 from compatibility_engine import generate_compatibility
+from compatibility_engine_en import generate_compatibility_en
+
 from translations import get_text
 
 
@@ -496,46 +498,49 @@ def choose_sign(message):
 
         first_sign = get_user_sign(user_id)
         second_sign = message.text
+        language = get_user_language(user_id)
 
         if not first_sign:
             bot.send_message(
                 message.chat.id,
-                "✨ Je dois d'abord connaître ton signe astrologique.",
+                get_text(
+                    language,
+                    "need_sign"
+                ),
                 reply_markup=signs_menu()
             )
             return
 
-        compatibility = generate_compatibility(
-            first_sign,
-            second_sign
-        )
+        if language == "en":
+            compatibility = generate_compatibility_en(
+                first_sign,
+                second_sign
+            )
+        else:
+            compatibility = generate_compatibility(
+                first_sign,
+                second_sign
+            )
 
         if not compatibility:
             bot.send_message(
                 message.chat.id,
-                "Une erreur est survenue pendant la préparation "
-                "de ta compatibilité."
+                get_text(
+                    language,
+                    "compatibility_error"
+                )
             )
             return
 
         bot.send_message(
             message.chat.id,
             compatibility,
-            reply_markup=main_menu()
+            reply_markup=main_menu(language)
         )
         return
 
-    save_user_sign(
-        user_id,
-        message.text
-    )
 
-    bot.send_message(
-        message.chat.id,
-        f"✅ Ton signe est enregistré : {message.text}\n\n"
-        "Bienvenue dans ton univers AstroVibe ✨",
-        reply_markup=main_menu()
-    )
+    
 
 
 
