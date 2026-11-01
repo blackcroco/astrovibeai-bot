@@ -1041,7 +1041,7 @@ def menu(message):
     elif message.text in bonus_buttons:
         show_daily_bonus(message)
     elif message.text in points_buttons:
-    show_points(message)
+        show_points(message)
 
     elif message.text in premium_buttons:
         bot.send_message(
