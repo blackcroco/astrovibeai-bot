@@ -1117,22 +1117,23 @@ def menu(message):
     elif message.text in points_buttons:
         show_points(message)
 
-    elif message.text in premium_buttons:
-    bot.send_message(
-        message.chat.id,
-        (
-            get_text(
-                language,
-                "premium_menu_title"
-            )
-            + "\n\n"
-            + get_text(
-                language,
-                "premium_menu_intro"
-            )
-        ),
-        reply_markup=premium_menu(language)
-    )
+        elif message.text in premium_buttons:
+        bot.send_message(
+            message.chat.id,
+            (
+                get_text(
+                    language,
+                    "premium_menu_title"
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "premium_menu_intro"
+                )
+            ),
+            reply_markup=premium_menu(language)
+        )
+
 
     elif message.text in settings_buttons:
         bot.send_message(
