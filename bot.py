@@ -990,17 +990,17 @@ def menu(message):
 
             )
             return
-if language == "en":
-    display_first_sign = next(
-        (
-            english_sign
-            for english_sign, french_sign in SIGNS_EN.items()
-            if french_sign == first_sign
-        ),
-        first_sign
-    )
-else:
-    display_first_sign = first_sign
+        if language == "en":
+            display_first_sign = next(
+                (
+                    english_sign
+                    for english_sign, french_sign in SIGNS_EN.items()
+                    if french_sign == first_sign
+                ),
+                first_sign
+            )
+        else:
+            display_first_sign = first_sign
 
         compatibility_requests.add(user_id)
 
@@ -1010,11 +1010,10 @@ else:
                 language,
                 "choose_partner_sign",
                 sign=display_first_sign
-
             ),
             reply_markup=signs_menu(language)
-
         )
+
 
     elif message.text in bonus_buttons:
         show_daily_bonus(message)
