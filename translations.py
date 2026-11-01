@@ -7,7 +7,12 @@ TRANSLATIONS = {
         "premium_button": "💎 Mode Premium",
         "points_button": "🏆 Mes points",
 
-        "language_button": "🌍 Langue",
+        
+"language_button": "🌍 Langue",
+"settings_button": "⚙️ Paramètres",
+"settings_title": "⚙️ Paramètres AstroVibe",
+"back_button": "↩️ Retour",
+
 
         # Langue
         "language_title": "🌍 Choisis ta langue :",
@@ -103,12 +108,16 @@ TRANSLATIONS = {
 
     "en": {
         # Main menu
-        "horoscope_button": "🔮 Daily Horoscope",
-        "compatibility_button": "❤️ Love Compatibility",
-        "bonus_button": "⭐ Daily Bonus",
-        "premium_button": "💎 Premium","points_button": "🏆 My Points",
-
-        "language_button": "🌍 Language",
+        
+"horoscope_button": "🔮 Daily Horoscope",
+"compatibility_button": "❤️ Love Compatibility",
+"bonus_button": "⭐ Daily Bonus",
+"premium_button": "💎 Premium",
+"points_button": "🏆 My Points",
+"language_button": "🌍 Language",
+"settings_button": "⚙️ Settings",
+"settings_title": "⚙️ AstroVibe Settings",
+"back_button": "↩️ Back",
 
         # Language
         "language_title": "🌍 Choose your language:",
