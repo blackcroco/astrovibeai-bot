@@ -388,6 +388,7 @@ compatibility_requests = set()
 # MENUS
 # ==================================================
 
+
 def main_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True
@@ -416,12 +417,30 @@ def main_menu(language="fr"):
             get_text(language, "premium_button")
         ),
         types.KeyboardButton(
-            get_text(language, "language_button")
+            get_text(language, "settings_button")
         )
     )
 
     return markup
 
+def settings_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "language_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "back_button")
+        )
+    )
+
+    return markup
 
 def language_menu():
     markup = types.ReplyKeyboardMarkup(
@@ -995,6 +1014,16 @@ def menu(message):
         "🌍 Langue",
         "🌍 Language"
     )
+    settings_buttons = (
+        "⚙️ Paramètres",
+        "⚙️ Settings"
+    )
+
+    back_buttons = (
+        "↩️ Retour",
+        "↩️ Back"
+    )
+
 
     if message.text in horoscope_buttons:
         show_horoscope(message)
@@ -1050,6 +1079,25 @@ def menu(message):
                 get_text(language, "premium_title")
                 + "\n\n"
                 + get_text(language, "premium_coming")
+            ),
+            reply_markup=main_menu(language)
+        )
+    elif message.text in settings_buttons:
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "settings_title"
+            ),
+            reply_markup=settings_menu(language)
+        )
+
+    elif message.text in back_buttons:
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "what_today"
             ),
             reply_markup=main_menu(language)
         )
