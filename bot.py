@@ -8,6 +8,8 @@ from flask import Flask, request
 
 from telebot import types
 from horoscope_engine import generate_daily_horoscope
+from horoscope_engine_en import generate_daily_horoscope_en
+
 from compatibility_engine import generate_compatibility
 from translations import get_text
 
@@ -547,6 +549,9 @@ def show_horoscope(message):
     sign = get_user_sign(
         message.from_user.id
     )
+language = get_user_language(
+    message.from_user.id
+)
 
     if not sign:
         bot.send_message(
@@ -557,20 +562,28 @@ def show_horoscope(message):
         )
         return
 
+    
+if language == "en":
+    horoscope = generate_daily_horoscope_en(sign)
+else:
     horoscope = generate_daily_horoscope(sign)
 
-    if not horoscope:
-        bot.send_message(
-            message.chat.id,
-            "Une erreur est survenue pendant la "
-            "préparation de ton horoscope."
+    
+if not horoscope:
+    bot.send_message(
+        message.chat.id,
+        get_text(
+            language,
+            "horoscope_error"
         )
-        return
+    )
+    return
 
     bot.send_message(
         message.chat.id,
         horoscope,
-        reply_markup=main_menu()
+        reply_markup=main_menu(language)
+
     )
 
 
