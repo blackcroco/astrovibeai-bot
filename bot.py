@@ -600,20 +600,74 @@ def show_horoscope(message):
 def show_points(message):
     create_or_update_user(message)
 
-    profile = get_user_profile(
-        message.from_user.id
-    )
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    profile = get_user_profile(user_id)
 
     if not profile:
         bot.send_message(
             message.chat.id,
-            "Impossible de charger ton profil."
+            get_text(
+                language,
+                "user_not_found"
+            ),
+            reply_markup=main_menu(language)
         )
         return
 
     sign, points, level, streak, last_bonus, premium = profile
 
-    level_name = get_level_name(level)
+    level_names_en = {
+        1: "Celestial Observer",
+        2: "Zodiac Explorer",
+        3: "Guardian of the Stars",
+        4: "Cosmic Oracle",
+        5: "Zodiac Master",
+        6: "Astral Legend"
+    }
+
+    sign_names_en = {
+        "♈ Bélier": "♈ Aries",
+        "♉ Taureau": "♉ Taurus",
+        "♊ Gémeaux": "♊ Gemini",
+        "♋ Cancer": "♋ Cancer",
+        "♌ Lion": "♌ Leo",
+        "♍ Vierge": "♍ Virgo",
+        "♎ Balance": "♎ Libra",
+        "♏ Scorpion": "♏ Scorpio",
+        "♐ Sagittaire": "♐ Sagittarius",
+        "♑ Capricorne": "♑ Capricorn",
+        "♒ Verseau": "♒ Aquarius",
+        "♓ Poissons": "♓ Pisces"
+    }
+
+    if language == "en":
+        display_sign = sign_names_en.get(
+            sign,
+            sign or "Not specified"
+        )
+
+        level_name = level_names_en.get(
+            level,
+            "Celestial Observer"
+        )
+
+        premium_text = (
+            "Active 💎"
+            if premium
+            else "Free"
+        )
+    else:
+        display_sign = sign or "Non renseigné"
+        level_name = get_level_name(level)
+
+        premium_text = (
+            "Actif 💎"
+            if premium
+            else "Gratuit"
+        )
+
     next_target = get_next_level_target(level)
 
     if next_target:
@@ -622,32 +676,48 @@ def show_points(message):
             0
         )
 
-        progression_text = (
-            f"📈 Prochain niveau dans "
-            f"{remaining} point(s)"
+        if language == "en":
+            progression_text = (
+                f"📈 Next level in {remaining} point(s)"
+            )
+        else:
+            progression_text = (
+                f"📈 Prochain niveau dans "
+                f"{remaining} point(s)"
+            )
+    else:
+        if language == "en":
+            progression_text = "👑 Maximum level reached"
+        else:
+            progression_text = "👑 Niveau maximal atteint"
+
+    if language == "en":
+        message_text = (
+            "🌌 Your AstroVibe Profile\n\n"
+            f"🔮 Sign: {display_sign}\n"
+            f"⭐ Points: {points}\n"
+            f"🏆 Level {level}: {level_name}\n"
+            f"🔥 Current streak: {streak} day(s)\n"
+            f"💎 Status: {premium_text}\n\n"
+            f"{progression_text}"
         )
     else:
-        progression_text = (
-            "👑 Niveau maximal atteint"
+        message_text = (
+            "🌌 Ton profil AstroVibe\n\n"
+            f"🔮 Signe : {display_sign}\n"
+            f"⭐ Points : {points}\n"
+            f"🏆 Niveau {level} : {level_name}\n"
+            f"🔥 Série actuelle : {streak} jour(s)\n"
+            f"💎 Statut : {premium_text}\n\n"
+            f"{progression_text}"
         )
-
-    premium_text = (
-        "Actif 💎"
-        if premium
-        else "Gratuit"
-    )
 
     bot.send_message(
         message.chat.id,
-        "🌌 Ton profil AstroVibe\n\n"
-        f"🔮 Signe : {sign or 'Non renseigné'}\n"
-        f"⭐ Points : {points}\n"
-        f"🏆 Niveau {level} : {level_name}\n"
-        f"🔥 Série actuelle : {streak} jour(s)\n"
-        f"💎 Statut : {premium_text}\n\n"
-        f"{progression_text}",
-        reply_markup=main_menu()
+        message_text,
+        reply_markup=main_menu(language)
     )
+
 
 
 @bot.message_handler(commands=["points"])
