@@ -549,47 +549,43 @@ def show_horoscope(message):
     sign = get_user_sign(
         message.from_user.id
     )
-language = get_user_language(
-    message.from_user.id
-)
+
+    language = get_user_language(
+        message.from_user.id
+    )
 
     if not sign:
         bot.send_message(
             message.chat.id,
-            "✨ Je dois d'abord connaître ton signe "
-            "astrologique.",
+            get_text(
+                language,
+                "need_sign"
+            ),
             reply_markup=signs_menu()
         )
         return
 
-    
-if language == "en":
-    horoscope = generate_daily_horoscope_en(sign)
-else:
-    horoscope = generate_daily_horoscope(sign)
+    if language == "en":
+        horoscope = generate_daily_horoscope_en(sign)
+    else:
+        horoscope = generate_daily_horoscope(sign)
 
-    
-if not horoscope:
-    bot.send_message(
-        message.chat.id,
-        get_text(
-            language,
-            "horoscope_error"
+    if not horoscope:
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "horoscope_error"
+            )
         )
-    )
-    return
+        return
 
     bot.send_message(
         message.chat.id,
         horoscope,
         reply_markup=main_menu(language)
-
     )
 
-
-@bot.message_handler(commands=["horoscope"])
-def horoscope_command(message):
-    show_horoscope(message)
 
 
 # ==================================================
