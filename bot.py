@@ -512,26 +512,22 @@ def start(message):
         or message.text in SIGNS_EN
     )
 )
-
-
 def choose_sign(message):
     create_or_update_user(message)
 
     user_id = message.from_user.id
-language = get_user_language(user_id)
+    language = get_user_language(user_id)
 
-if message.text in SIGNS_EN:
-    selected_sign = SIGNS_EN[message.text]
-else:
-    selected_sign = message.text
+    if message.text in SIGNS_EN:
+        selected_sign = SIGNS_EN[message.text]
+    else:
+        selected_sign = message.text
 
     if user_id in compatibility_requests:
         compatibility_requests.discard(user_id)
 
         first_sign = get_user_sign(user_id)
         second_sign = selected_sign
-
-        
 
         if not first_sign:
             bot.send_message(
@@ -540,7 +536,7 @@ else:
                     language,
                     "need_sign"
                 ),
-                reply_markup=signs_menu()
+                reply_markup=signs_menu(language)
             )
             return
 
