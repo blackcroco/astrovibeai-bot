@@ -1117,7 +1117,7 @@ def menu(message):
     elif message.text in points_buttons:
         show_points(message)
 
-        elif message.text in premium_buttons:
+    elif message.text in premium_buttons:
         bot.send_message(
             message.chat.id,
             (
