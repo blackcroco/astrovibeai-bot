@@ -5,6 +5,8 @@ TRANSLATIONS = {
         "compatibility_button": "❤️ Compatibilité amoureuse",
         "bonus_button": "⭐ Bonus quotidien",
         "premium_button": "💎 Mode Premium",
+        "points_button": "🏆 Mes points",
+
         "language_button": "🌍 Langue",
 
         # Langue
@@ -104,7 +106,8 @@ TRANSLATIONS = {
         "horoscope_button": "🔮 Daily Horoscope",
         "compatibility_button": "❤️ Love Compatibility",
         "bonus_button": "⭐ Daily Bonus",
-        "premium_button": "💎 Premium",
+        "premium_button": "💎 Premium","points_button": "🏆 My Points",
+
         "language_button": "🌍 Language",
 
         # Language
