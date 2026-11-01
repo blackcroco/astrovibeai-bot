@@ -990,6 +990,17 @@ def menu(message):
 
             )
             return
+if language == "en":
+    display_first_sign = next(
+        (
+            english_sign
+            for english_sign, french_sign in SIGNS_EN.items()
+            if french_sign == first_sign
+        ),
+        first_sign
+    )
+else:
+    display_first_sign = first_sign
 
         compatibility_requests.add(user_id)
 
@@ -998,7 +1009,8 @@ def menu(message):
             get_text(
                 language,
                 "choose_partner_sign",
-                sign=first_sign
+                sign=display_first_sign
+
             ),
             reply_markup=signs_menu(language)
 
