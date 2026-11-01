@@ -64,6 +64,19 @@ TRANSLATIONS = {
             "⏳ Bonus déjà récupéré\n\n"
             "Tu as déjà reçu ta récompense quotidienne aujourd'hui."
         ),
+"user_not_found": (
+    "Impossible de charger ton profil.\n"
+    "Envoie /start puis réessaie."
+),
+"balance": "⭐ Solde : {points} points",
+"bonus_streak": "🔥 Série : {streak} jour(s)",
+"bonus_return": (
+    "Reviens demain pour prolonger ta série cosmique ✨"
+),
+"level_up": (
+    "🌟 NOUVEAU NIVEAU !\n"
+    "Tu atteins le niveau {level} : {name}"
+),
 
         # Profil
         "profile_title": "🌌 Ton profil AstroVibe",
@@ -152,7 +165,20 @@ TRANSLATIONS = {
             "You have already received your daily reward today."
         ),
 
-        # Profile
+     "user_not_found": (
+    "Unable to load your profile.\n"
+    "Send /start and try again."
+),
+"balance": "⭐ Balance: {points} points",
+"bonus_streak": "🔥 Streak: {streak} day(s)",
+"bonus_return": (
+    "Come back tomorrow to extend your cosmic streak ✨"
+),
+"level_up": (
+    "🌟 NEW LEVEL!\n"
+    "You have reached level {level}: {name}"
+),
+   # Profile
         "profile_title": "🌌 Your AstroVibe Profile",
         "sign_label": "🔮 Sign: {sign}",
         "points_label": "⭐ Points: {points}",
