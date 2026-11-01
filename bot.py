@@ -366,6 +366,21 @@ SIGNS = [
     "♒ Verseau",
     "♓ Poissons"
 ]
+SIGNS_EN = {
+    "♈ Aries": "♈ Bélier",
+    "♉ Taurus": "♉ Taureau",
+    "♊ Gemini": "♊ Gémeaux",
+    "♋ Cancer": "♋ Cancer",
+    "♌ Leo": "♌ Lion",
+    "♍ Virgo": "♍ Vierge",
+    "♎ Libra": "♎ Balance",
+    "♏ Scorpio": "♏ Scorpion",
+    "♐ Sagittarius": "♐ Sagittaire",
+    "♑ Capricorn": "♑ Capricorne",
+    "♒ Aquarius": "♒ Verseau",
+    "♓ Pisces": "♓ Poissons"
+}
+
 compatibility_requests = set()
 
 
@@ -417,23 +432,29 @@ def language_menu():
 
     return markup
 
-def signs_menu():
+def signs_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True,
         one_time_keyboard=True
     )
 
-    for index in range(0, len(SIGNS), 2):
+    if language == "en":
+        signs = list(SIGNS_EN.keys())
+    else:
+        signs = SIGNS
+
+    for index in range(0, len(signs), 2):
         markup.row(
             types.KeyboardButton(
-                SIGNS[index]
+                signs[index]
             ),
             types.KeyboardButton(
-                SIGNS[index + 1]
+                signs[index + 1]
             )
         )
 
     return markup
+
 
 
 # ==================================================
@@ -455,7 +476,8 @@ def start(message):
                 language,
                 "choose_sign"
             ),
-            reply_markup=signs_menu()
+            reply_markup=signs_menu(language)
+
         )
         return
 
@@ -484,21 +506,32 @@ def start(message):
 # CHOIX DU SIGNE
 # ==================================================
 
-
 @bot.message_handler(
-    func=lambda message: message.text in SIGNS
+    func=lambda message: (
+        message.text in SIGNS
+        or message.text in SIGNS_EN
+    )
 )
+
+
 def choose_sign(message):
     create_or_update_user(message)
 
     user_id = message.from_user.id
+language = get_user_language(user_id)
+
+if message.text in SIGNS_EN:
+    selected_sign = SIGNS_EN[message.text]
+else:
+    selected_sign = message.text
 
     if user_id in compatibility_requests:
         compatibility_requests.discard(user_id)
 
         first_sign = get_user_sign(user_id)
-        second_sign = message.text
-        language = get_user_language(user_id)
+        second_sign = selected_sign
+
+        
 
         if not first_sign:
             bot.send_message(
@@ -539,6 +572,25 @@ def choose_sign(message):
         )
         return
 
+    save_user_sign(
+        user_id,
+        selected_sign
+    )
+
+    if language == "en":
+        display_sign = message.text
+    else:
+        display_sign = selected_sign
+
+    bot.send_message(
+        message.chat.id,
+        get_text(
+            language,
+            "sign_saved",
+            sign=display_sign
+        ),
+        reply_markup=main_menu(language)
+    )
 
     
 
@@ -566,7 +618,8 @@ def show_horoscope(message):
                 language,
                 "need_sign"
             ),
-            reply_markup=signs_menu()
+            reply_markup=signs_menu(language)
+
         )
         return
 
@@ -937,7 +990,8 @@ def menu(message):
                     language,
                     "need_sign"
                 ),
-                reply_markup=signs_menu()
+                reply_markup=signs_menu(language)
+
             )
             return
 
@@ -950,7 +1004,8 @@ def menu(message):
                 "choose_partner_sign",
                 sign=first_sign
             ),
-            reply_markup=signs_menu()
+            reply_markup=signs_menu(language)
+
         )
 
     elif message.text in bonus_buttons:
