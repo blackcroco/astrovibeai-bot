@@ -469,6 +469,18 @@ def start(message):
     sign = get_user_sign(user_id)
     language = get_user_language(user_id)
 
+    if language == "en" and sign:
+        display_sign = next(
+            (
+                english_sign
+                for english_sign, french_sign in SIGNS_EN.items()
+                if french_sign == sign
+            ),
+            sign
+        )
+    else:
+        display_sign = sign
+
     if not sign:
         bot.send_message(
             message.chat.id,
@@ -477,7 +489,6 @@ def start(message):
                 "choose_sign"
             ),
             reply_markup=signs_menu(language)
-
         )
         return
 
@@ -489,7 +500,7 @@ def start(message):
             + get_text(
                 language,
                 "your_sign",
-                sign=sign
+                sign=display_sign
             )
             + "\n\n"
             + get_text(
@@ -499,6 +510,7 @@ def start(message):
         ),
         reply_markup=main_menu(language)
     )
+
 
 
 
