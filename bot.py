@@ -658,58 +658,99 @@ def points_command(message):
 # ==================================================
 # BONUS QUOTIDIEN
 # ==================================================
-
 def show_daily_bonus(message):
     create_or_update_user(message)
-language = get_user_language(
-    message.from_user.id
-)
 
-    result = claim_daily_bonus(
-        message.from_user.id
-    )
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    result = claim_daily_bonus(user_id)
 
     if result["status"] == "user_not_found":
         bot.send_message(
             message.chat.id,
-            "Impossible de charger ton profil. "
-            "Envoie /start puis réessaie."
+            get_text(
+                language,
+                "user_not_found"
+            ),
+            reply_markup=main_menu(language)
         )
         return
 
     if result["status"] == "already_claimed":
+        message_text = (
+            get_text(
+                language,
+                "bonus_already"
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "balance",
+                points=result["points"]
+            )
+            + "\n"
+            + get_text(
+                language,
+                "bonus_streak",
+                streak=result["streak"]
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "bonus_return"
+            )
+        )
+
         bot.send_message(
             message.chat.id,
-            "⏳ Bonus déjà récupéré\n\n"
-            "Tu as déjà reçu ta récompense "
-            "quotidienne aujourd'hui.\n\n"
-            f"⭐ Solde : {result['points']} points\n"
-            f"🔥 Série : {result['streak']} jour(s)\n\n"
-            "Reviens demain pour prolonger "
-            "ta série cosmique ✨",
-            reply_markup=main_menu()
+            message_text,
+            reply_markup=main_menu(language)
         )
         return
 
     message_text = (
-        "🎁 Bonus quotidien récupéré !\n\n"
-        f"⭐ Bonus de base : "
-        f"+{result['base_reward']} points\n"
+        get_text(
+            language,
+            "bonus_claimed_title"
+        )
+        + "\n\n"
+        + get_text(
+            language,
+            "base_bonus",
+            points=result["base_reward"]
+        )
     )
 
     if result["streak_reward"] > 0:
         message_text += (
-            f"🔥 Bonus de série : "
-            f"+{result['streak_reward']} points\n"
+            "\n"
+            + get_text(
+                language,
+                "streak_bonus",
+                points=result["streak_reward"]
+            )
         )
 
     message_text += (
-        f"\n✨ Récompense totale : "
-        f"+{result['total_reward']} points\n"
-        f"🏆 Nouveau solde : "
-        f"{result['points']} points\n"
-        f"🔥 Série actuelle : "
-        f"{result['streak']} jour(s)"
+        "\n\n"
+        + get_text(
+            language,
+            "total_reward",
+            points=result["total_reward"]
+        )
+        + "\n"
+        + get_text(
+            language,
+            "new_balance",
+            points=result["points"]
+        )
+        + "\n"
+        + get_text(
+            language,
+            "current_streak",
+            streak=result["streak"]
+        )
     )
 
     if result["level_up"]:
@@ -718,21 +759,29 @@ language = get_user_language(
         )
 
         message_text += (
-            "\n\n🌟 NOUVEAU NIVEAU !\n"
-            f"Tu atteins le niveau "
-            f"{result['level']} : {level_name}"
+            "\n\n"
+            + get_text(
+                language,
+                "level_up",
+                level=result["level"],
+                name=level_name
+            )
         )
 
     message_text += (
-        "\n\nReviens demain pour poursuivre "
-        "ton ascension parmi les étoiles ✨"
+        "\n\n"
+        + get_text(
+            language,
+            "come_back_tomorrow"
+        )
     )
 
     bot.send_message(
         message.chat.id,
         message_text,
-        reply_markup=main_menu()
+        reply_markup=main_menu(language)
     )
+
 
 
 @bot.message_handler(commands=["bonus"])
