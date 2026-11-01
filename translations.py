@@ -98,6 +98,17 @@ TRANSLATIONS = {
         # Premium
         "premium_title": "💎 AstroVibe Premium",
         "premium_coming": "Les fonctionnalités Premium arrivent bientôt.",
+"premium_menu_title": "💎 AstroVibe Premium",
+"premium_menu_intro": (
+    "Explore ton univers astrologique plus profondément ✨"
+),
+"premium_daily_button": "☀️ Mon Astro du jour +",
+"premium_week_button": "📆 Ma semaine",
+"premium_month_button": "🌙 Mon mois",
+"premium_year_button": "🌟 Mon année",
+"premium_compatibility_button": "❤️ Compatibilité Premium",
+"premium_morning_button": "🌅 Horoscope du matin",
+"premium_subscription_button": "💎 Mon abonnement",
 
         # Divers
         "unknown_request": (
@@ -203,6 +214,17 @@ TRANSLATIONS = {
         # Premium
         "premium_title": "💎 AstroVibe Premium",
         "premium_coming": "Premium features are coming soon.",
+"premium_menu_title": "💎 AstroVibe Premium",
+"premium_menu_intro": (
+    "Go deeper into your astrological universe ✨"
+),
+"premium_daily_button": "☀️ My Daily Astro+",
+"premium_week_button": "📆 My Week",
+"premium_month_button": "🌙 My Month",
+"premium_year_button": "🌟 My Year",
+"premium_compatibility_button": "❤️ Premium Compatibility",
+"premium_morning_button": "🌅 Morning Horoscope",
+"premium_subscription_button": "💎 My Subscription",
 
         # Other
         "unknown_request": (
