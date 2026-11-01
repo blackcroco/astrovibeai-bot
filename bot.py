@@ -974,15 +974,16 @@ def menu(message):
         "❤️ Love Compatibility"
     )
 
-    bonus_buttons = (
+        bonus_buttons = (
         "⭐ Bonus quotidien",
         "⭐ Daily Bonus"
-        points_buttons = (
-    "🏆 Mes points",
-    "🏆 My Points"
-)
-
     )
+
+    points_buttons = (
+        "🏆 Mes points",
+        "🏆 My Points"
+    )
+
 
     premium_buttons = (
         "💎 Mode Premium",
