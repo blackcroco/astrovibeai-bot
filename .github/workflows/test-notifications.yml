@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-            - name: Trigger AstroVibe notifications
+      - name: Trigger AstroVibe notifications
         env:
           NOTIFICATION_SECRET: ${{ secrets.NOTIFICATION_SECRET }}
         run: |
