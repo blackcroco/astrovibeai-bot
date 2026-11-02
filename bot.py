@@ -1090,13 +1090,19 @@ def menu(message):
         "🏆 My Points"
     )
 
-    premium_buttons = (
+        premium_buttons = (
         "💎 Mode Premium",
         "💎 Premium"
     )
+
     premium_week_buttons = (
         "📆 Ma semaine",
         "📆 My Week"
+    )
+
+    premium_daily_buttons = (
+        "☀️ Mon Astro du jour +",
+        "☀️ My Daily Astro+"
     )
 
 
@@ -1178,6 +1184,52 @@ def menu(message):
                     "premium_menu_intro"
                 )
             ),
+            reply_markup=premium_menu(language)
+        )
+    elif message.text in premium_daily_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        sign = get_user_sign(user_id)
+
+        result = generate_premium_feature(
+            feature="daily",
+            sign=sign,
+            language=language,
+            user_id=user_id
+        )
+
+        if result["status"] == "missing_sign":
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        if result["status"] == "success":
+            bot.send_message(
+                message.chat.id,
+                result["content"],
+                reply_markup=premium_menu(language)
+            )
+            return
+
+        error_text = (
+            "Une erreur est survenue pendant la préparation "
+            "de ton Astro du jour +."
+            if language == "fr"
+            else
+            "An error occurred while preparing your Daily Astro+."
+        )
+
+        bot.send_message(
+            message.chat.id,
+            error_text,
             reply_markup=premium_menu(language)
         )
 
