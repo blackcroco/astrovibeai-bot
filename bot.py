@@ -2268,7 +2268,7 @@ def run_notifications_route():
         "X-Notification-Secret"
     )
 
-        if not configured_secret:
+    if not configured_secret:
         return {
             "status": "error",
             "message": "Notification secret is not configured",
@@ -2286,10 +2286,10 @@ def run_notifications_route():
             "provided_length": len(provided_secret) if provided_secret else 0,
         }, 403
 
-
     result = run_due_notifications()
 
     return result, 200
+
 
 if __name__ == "__main__":
     bot.set_webhook(
