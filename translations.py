@@ -136,6 +136,23 @@ TRANSLATIONS = {
 "notifications_timezone_saved": "✅ Fuseau horaire enregistré : {timezone}",
 
 "premium_subscription_button": "💎 Mon abonnement",
+"subscription_title": "💎 Mon abonnement",
+"subscription_status": "Statut : {status}",
+"subscription_premium": "AstroVibe Premium ✅",
+"subscription_free": "Gratuit",
+"subscription_active": (
+    "✨ Ton accès Premium est actif."
+),
+"subscription_features": (
+    "Tes avantages :\n\n"
+    "☀️ Astro du jour +\n"
+    "📆 Prévisions de la semaine\n"
+    "🌙 Prévisions du mois\n"
+    "🌟 Prévisions annuelles\n"
+    "❤️ Compatibilité Premium\n"
+    "🔔 Notifications personnalisées"
+),
+"subscription_upgrade": "💎 Passer Premium",
 
         # Divers
         "unknown_request": (
@@ -277,6 +294,23 @@ TRANSLATIONS = {
 "notifications_timezone_saved": "✅ Time zone saved: {timezone}",
 
 "premium_subscription_button": "💎 My Subscription",
+"subscription_title": "💎 My Subscription",
+"subscription_status": "Status: {status}",
+"subscription_premium": "AstroVibe Premium ✅",
+"subscription_free": "Free",
+"subscription_active": (
+    "✨ Your Premium access is active."
+),
+"subscription_features": (
+    "Your benefits:\n\n"
+    "☀️ Daily Astro+\n"
+    "📆 Weekly Forecast\n"
+    "🌙 Monthly Forecast\n"
+    "🌟 Yearly Forecast\n"
+    "❤️ Premium Compatibility\n"
+    "🔔 Personalized Notifications"
+),
+"subscription_upgrade": "💎 Upgrade to Premium",
 
         # Other
         "unknown_request": (
