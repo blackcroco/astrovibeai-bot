@@ -102,6 +102,15 @@ TRANSLATIONS = {
 "premium_menu_intro": (
     "Explore ton univers astrologique plus profondément ✨"
 ),
+"premium_locked_title": "🔒 Fonctionnalité Premium",
+
+"premium_locked_text": (
+    "Cette fonctionnalité est réservée aux membres AstroVibe Premium 💎\n\n"
+    "Passe Premium pour débloquer les prévisions approfondies "
+    "et toutes les expériences exclusives AstroVibe."
+),
+"premium_discover_button": "💎 Découvrir Premium",
+
 "premium_daily_button": "☀️ Mon Astro du jour +",
 "premium_week_button": "📆 Ma semaine",
 "premium_month_button": "🌙 Mon mois",
@@ -217,7 +226,14 @@ TRANSLATIONS = {
 "premium_menu_title": "💎 AstroVibe Premium",
 "premium_menu_intro": (
     "Go deeper into your astrological universe ✨"
+),"premium_locked_title": "🔒 Premium Feature",
+"premium_locked_text": (
+    "This feature is reserved for AstroVibe Premium members 💎\n\n"
+    "Upgrade to Premium to unlock deeper forecasts "
+    "and exclusive AstroVibe experiences."
 ),
+"premium_discover_button": "💎 Discover Premium",
+
 "premium_daily_button": "☀️ My Daily Astro+",
 "premium_week_button": "📆 My Week",
 "premium_month_button": "🌙 My Month",
