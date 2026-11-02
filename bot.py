@@ -13,6 +13,7 @@ from horoscope_engine_en import generate_daily_horoscope_en
 from compatibility_engine import generate_compatibility
 from compatibility_engine_en import generate_compatibility_en
 from weekly_engine import generate_weekly_horoscope
+from premium_engine import generate_premium_feature
 
 from translations import get_text
 
@@ -1178,52 +1179,56 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
-    elif message.text in premium_week_buttons:
-        if is_premium(user_id):
-            sign = get_user_sign(user_id)
+        elif message.text in premium_week_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
 
-            if not sign:
-                bot.send_message(
-                    message.chat.id,
-                    get_text(
-                        language,
-                        "need_sign"
-                    ),
-                    reply_markup=signs_menu(language)
-                )
-                return
+        sign = get_user_sign(user_id)
 
-            weekly_horoscope = generate_weekly_horoscope(
-                sign,
-                language
+        result = generate_premium_feature(
+            feature="weekly",
+            sign=sign,
+            language=language,
+            user_id=user_id
+        )
+
+        if result["status"] == "missing_sign":
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        if result["status"] == "success":
+            bot.send_message(
+                message.chat.id,
+                result["content"],
+                reply_markup=premium_menu(language)
+            )
+            return
+
+        if language == "en":
+            error_text = (
+                "An error occurred while preparing "
+                "your weekly forecast."
+            )
+        else:
+            error_text = (
+                "Une erreur est survenue pendant la préparation "
+                "de tes prévisions de la semaine."
             )
 
-            if weekly_horoscope:
-                bot.send_message(
-                    message.chat.id,
-                    weekly_horoscope,
-                    reply_markup=premium_menu(language)
-                )
-            else:
-                if language == "en":
-                    error_text = (
-                        "An error occurred while preparing "
-                        "your weekly forecast."
-                    )
-                else:
-                    error_text = (
-                        "Une erreur est survenue pendant la préparation "
-                        "de tes prévisions de la semaine."
-                    )
+        bot.send_message(
+            message.chat.id,
+            error_text,
+            reply_markup=premium_menu(language)
+        )
 
-                bot.send_message(
-                    message.chat.id,
-                    error_text,
-                    reply_markup=premium_menu(language)
-                )
-
-        else:
-            show_premium_locked(message)
 
 
     elif message.text in settings_buttons:
