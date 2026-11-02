@@ -1,4 +1,5 @@
 from weekly_engine import generate_weekly_horoscope
+from premium_daily_engine import generate_premium_daily
 
 
 # ==================================================
@@ -58,11 +59,23 @@ def generate_weekly(sign, language):
 # ==================================================
 
 def generate_daily_plus(sign, language):
-    # Le moteur complet sera ajouté ici.
+    content = generate_premium_daily(
+        sign,
+        language
+    )
+
+    if not content:
+        return premium_result(
+            status="error",
+            feature=PREMIUM_DAILY
+        )
+
     return premium_result(
-        status="coming_soon",
+        status="success",
+        content=content,
         feature=PREMIUM_DAILY
     )
+
 
 
 # ==================================================
