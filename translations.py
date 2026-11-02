@@ -132,6 +132,8 @@ TRANSLATIONS = {
 "notifications_time_saved": "✅ Heure enregistrée : {time}",
 
 "notifications_timezone_button": "🌐 Fuseau horaire",
+"notifications_choose_timezone": "🌐 Choisis ton fuseau horaire :",
+"notifications_timezone_saved": "✅ Fuseau horaire enregistré : {timezone}",
 
 "premium_subscription_button": "💎 Mon abonnement",
 
@@ -271,6 +273,8 @@ TRANSLATIONS = {
 "notifications_time_saved": "✅ Time saved: {time}",
 
 "notifications_timezone_button": "🌐 Time zone",
+"notifications_choose_timezone": "🌐 Choose your time zone:",
+"notifications_timezone_saved": "✅ Time zone saved: {timezone}",
 
 "premium_subscription_button": "💎 My Subscription",
 
