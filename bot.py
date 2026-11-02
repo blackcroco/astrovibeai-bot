@@ -344,6 +344,20 @@ def set_notifications_enabled(user_id, enabled):
                     user_id
                 )
             )
+def set_notification_time(user_id, notification_time):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET notification_time = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    notification_time,
+                    user_id
+                )
+            )
 
 # ==================================================
 # BONUS QUOTIDIEN
@@ -632,6 +646,28 @@ def notifications_menu(language="fr", enabled=False):
                 language,
                 "back_button"
             )
+        )
+    )
+
+    return markup
+def notification_time_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton("07:00"),
+        types.KeyboardButton("08:00")
+    )
+
+    markup.row(
+        types.KeyboardButton("09:00"),
+        types.KeyboardButton("10:00")
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "back_button")
         )
     )
 
@@ -1276,6 +1312,17 @@ def menu(message):
         "🔕 Désactiver",
         "🔕 Disable"
     )
+    notifications_time_buttons = (
+        "⏰ Modifier l'heure",
+        "⏰ Change time"
+    )
+
+    notification_time_choices = (
+        "07:00",
+        "08:00",
+        "09:00",
+        "10:00"
+    )
 
 
 
@@ -1721,6 +1768,46 @@ def menu(message):
                 "🔕 Notifications désactivées."
                 if language == "fr"
                 else "🔕 Notifications disabled."
+            ),
+            reply_markup=notifications_menu(
+                language,
+                notification_settings["enabled"]
+            )
+        )
+    elif message.text in notifications_time_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "notifications_choose_time"
+            ),
+            reply_markup=notification_time_menu(language)
+        )
+
+    elif message.text in notification_time_choices:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        set_notification_time(
+            user_id,
+            message.text
+        )
+
+        notification_settings = get_notification_settings(
+            user_id
+        )
+
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "notifications_time_saved",
+                time=message.text
             ),
             reply_markup=notifications_menu(
                 language,
