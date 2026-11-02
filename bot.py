@@ -2268,16 +2268,24 @@ def run_notifications_route():
         "X-Notification-Secret"
     )
 
-    if not configured_secret:
+        if not configured_secret:
         return {
             "status": "error",
-            "message": "Notification secret is not configured."
+            "message": "Notification secret is not configured",
+            "configured_present": False,
+            "provided_present": bool(provided_secret),
+            "provided_length": len(provided_secret) if provided_secret else 0,
         }, 500
 
     if provided_secret != configured_secret:
         return {
-            "status": "forbidden"
+            "status": "forbidden",
+            "configured_present": True,
+            "provided_present": bool(provided_secret),
+            "configured_length": len(configured_secret),
+            "provided_length": len(provided_secret) if provided_secret else 0,
         }, 403
+
 
     result = run_due_notifications()
 
