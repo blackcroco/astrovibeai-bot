@@ -1,0 +1,15 @@
+name: Test AstroVibe Notifications
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-notifications:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger AstroVibe notifications
+        run: |
+          curl --fail-with-body \
+            -H "X-Notification-Secret: ${{ secrets.NOTIFICATION_SECRET }}" \
+            "https://astrovibeai-bot.onrender.com/notifications/run"
