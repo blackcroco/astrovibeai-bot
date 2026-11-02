@@ -423,6 +423,7 @@ SIGNS_EN = {
 }
 
 compatibility_requests = set()
+premium_compatibility_requests = set()
 
 
 # ==================================================
@@ -643,6 +644,56 @@ def choose_sign(message):
         selected_sign = SIGNS_EN[message.text]
     else:
         selected_sign = message.text
+    if user_id in premium_compatibility_requests:
+        premium_compatibility_requests.discard(user_id)
+
+        first_sign = get_user_sign(user_id)
+        second_sign = selected_sign
+
+        if not first_sign:
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        result = generate_premium_feature(
+            feature="compatibility",
+            sign=first_sign,
+            second_sign=second_sign,
+            language=language,
+            user_id=user_id
+        )
+
+        if result["status"] == "success":
+            bot.send_message(
+                message.chat.id,
+                result["content"],
+                reply_markup=premium_menu(language)
+            )
+            return
+
+        if language == "en":
+            error_text = (
+                "An error occurred while preparing "
+                "your Premium compatibility."
+            )
+        else:
+            error_text = (
+                "Une erreur est survenue pendant la préparation "
+                "de ta compatibilité Premium."
+            )
+
+        bot.send_message(
+            message.chat.id,
+            error_text,
+            reply_markup=premium_menu(language)
+        )
+        return
 
     if user_id in compatibility_requests:
         compatibility_requests.discard(user_id)
@@ -1114,6 +1165,10 @@ def menu(message):
         "🌟 Mon année",
         "🌟 My Year"
     )
+    premium_compatibility_buttons = (
+        "❤️ Compatibilité Premium",
+        "❤️ Premium Compatibility"
+    )
 
 
 
@@ -1390,6 +1445,53 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
+    elif message.text in premium_compatibility_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        first_sign = get_user_sign(user_id)
+
+        if not first_sign:
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        premium_compatibility_requests.add(user_id)
+
+        if language == "en":
+            display_first_sign = next(
+                (
+                    english_sign
+                    for english_sign, french_sign in SIGNS_EN.items()
+                    if french_sign == first_sign
+                ),
+                first_sign
+            )
+
+            message_text = (
+                "💎 Premium Compatibility\n\n"
+                f"Your sign: {display_first_sign}\n\n"
+                "Choose the other person's zodiac sign:"
+            )
+        else:
+            message_text = (
+                "💎 Compatibilité Premium\n\n"
+                f"Ton signe : {first_sign}\n\n"
+                "Choisis le signe de l'autre personne :"
+            )
+
+        bot.send_message(
+            message.chat.id,
+            message_text,
+            reply_markup=signs_menu(language)
+        )
 
     elif message.text in settings_buttons:
         bot.send_message(
