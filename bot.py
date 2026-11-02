@@ -1162,6 +1162,8 @@ def menu(message):
     elif message.text in points_buttons:
         show_points(message)
 
+    
+    
     elif message.text in premium_buttons:
         bot.send_message(
             message.chat.id,
@@ -1179,7 +1181,7 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
-        elif message.text in premium_week_buttons:
+    elif message.text in premium_week_buttons:
         if not is_premium(user_id):
             show_premium_locked(message)
             return
