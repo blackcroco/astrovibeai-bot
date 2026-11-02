@@ -358,6 +358,20 @@ def set_notification_time(user_id, notification_time):
                     user_id
                 )
             )
+def set_notification_timezone(user_id, timezone_name):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET timezone = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    timezone_name,
+                    user_id
+                )
+            )
 
 # ==================================================
 # BONUS QUOTIDIEN
