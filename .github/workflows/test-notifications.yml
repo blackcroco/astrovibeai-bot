@@ -2,6 +2,9 @@ name: Test AstroVibe Notifications
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '7,37 * * * *'
+
 
 jobs:
   test-notifications:
