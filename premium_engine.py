@@ -4,6 +4,9 @@ from premium_forecast_engine import (
     generate_monthly_horoscope,
     generate_yearly_horoscope
 )
+from premium_compatibility_engine import (
+    generate_premium_compatibility as generate_deep_compatibility
+)
 
 
 # ==================================================
@@ -138,11 +141,24 @@ def generate_premium_compatibility(
     second_sign,
     language
 ):
-    # Le moteur complet sera ajouté ici.
+    content = generate_deep_compatibility(
+        first_sign,
+        second_sign,
+        language
+    )
+
+    if not content:
+        return premium_result(
+            status="error",
+            feature=PREMIUM_COMPATIBILITY
+        )
+
     return premium_result(
-        status="coming_soon",
+        status="success",
+        content=content,
         feature=PREMIUM_COMPATIBILITY
     )
+
 
 
 # ==================================================
