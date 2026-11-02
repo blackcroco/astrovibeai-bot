@@ -1178,7 +1178,7 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
-        elif message.text in premium_week_buttons:
+    elif message.text in premium_week_buttons:
         if is_premium(user_id):
             sign = get_user_sign(user_id)
 
