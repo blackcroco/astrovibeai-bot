@@ -1527,6 +1527,11 @@ def menu(message):
     )
     premium_notifications_buttons = (
         "🔔 Notifications",
+    premium_subscription_buttons = (
+        "💎 Mon abonnement",
+        "💎 My Subscription"
+    )
+
     )
     notifications_enable_buttons = (
         "🔔 Activer",
@@ -2093,6 +2098,67 @@ def menu(message):
                 language,
                 notification_settings["enabled"]
             )
+        )
+    elif message.text in premium_subscription_buttons:
+        premium_active = is_premium(user_id)
+
+        if premium_active:
+            status_text = get_text(
+                language,
+                "subscription_premium"
+            )
+
+            message_text = (
+                get_text(
+                    language,
+                    "subscription_title"
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "subscription_status",
+                    status=status_text
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "subscription_features"
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "subscription_active"
+                )
+            )
+
+        else:
+            status_text = get_text(
+                language,
+                "subscription_free"
+            )
+
+            message_text = (
+                get_text(
+                    language,
+                    "subscription_title"
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "subscription_status",
+                    status=status_text
+                )
+                + "\n\n"
+                + get_text(
+                    language,
+                    "subscription_features"
+                )
+            )
+
+        bot.send_message(
+            message.chat.id,
+            message_text,
+            reply_markup=premium_menu(language)
         )
 
     elif message.text in settings_buttons:
