@@ -1095,7 +1095,7 @@ def menu(message):
         "💎 Premium"
     )
 
-        premium_week_buttons = (
+    premium_week_buttons = (
         "📆 Ma semaine",
         "📆 My Week"
     )
