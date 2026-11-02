@@ -128,6 +128,9 @@ TRANSLATIONS = {
 "notifications_enable_button": "🔔 Activer",
 "notifications_disable_button": "🔕 Désactiver",
 "notifications_time_button": "⏰ Modifier l'heure",
+"notifications_choose_time": "⏰ Choisis l'heure de ta notification :",
+"notifications_time_saved": "✅ Heure enregistrée : {time}",
+
 "notifications_timezone_button": "🌐 Fuseau horaire",
 
 "premium_subscription_button": "💎 Mon abonnement",
@@ -264,6 +267,9 @@ TRANSLATIONS = {
 "notifications_enable_button": "🔔 Enable",
 "notifications_disable_button": "🔕 Disable",
 "notifications_time_button": "⏰ Change time",
+"notifications_choose_time": "⏰ Choose your notification time:",
+"notifications_time_saved": "✅ Time saved: {time}",
+
 "notifications_timezone_button": "🌐 Time zone",
 
 "premium_subscription_button": "💎 My Subscription",
