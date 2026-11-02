@@ -116,7 +116,8 @@ TRANSLATIONS = {
 "premium_month_button": "🌙 Mon mois",
 "premium_year_button": "🌟 Mon année",
 "premium_compatibility_button": "❤️ Compatibilité Premium",
-"premium_morning_button": "🌅 Horoscope du matin",
+"premium_morning_button": "🔔 Notifications",
+
 "premium_subscription_button": "💎 Mon abonnement",
 
         # Divers
@@ -239,7 +240,8 @@ TRANSLATIONS = {
 "premium_month_button": "🌙 My Month",
 "premium_year_button": "🌟 My Year",
 "premium_compatibility_button": "❤️ Premium Compatibility",
-"premium_morning_button": "🌅 Morning Horoscope",
+"premium_morning_button": "🔔 Notifications",
+
 "premium_subscription_button": "💎 My Subscription",
 
         # Other
