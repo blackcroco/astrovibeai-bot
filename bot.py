@@ -686,6 +686,39 @@ def notification_time_menu(language="fr"):
     )
 
     return markup
+def notification_timezone_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            "🇮🇸 Atlantic/Reykjavik"
+        ),
+        types.KeyboardButton(
+            "🇫🇷 Europe/Paris"
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            "🇬🇧 Europe/London"
+        ),
+        types.KeyboardButton(
+            "🇺🇸 America/New_York"
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(
+                language,
+                "back_button"
+            )
+        )
+    )
+
+    return markup
 
 def signs_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
@@ -1337,6 +1370,17 @@ def menu(message):
         "09:00",
         "10:00"
     )
+    notifications_timezone_buttons = (
+        "🌐 Fuseau horaire",
+        "🌐 Time zone"
+    )
+
+    notification_timezone_choices = {
+        "🇮🇸 Atlantic/Reykjavik": "Atlantic/Reykjavik",
+        "🇫🇷 Europe/Paris": "Europe/Paris",
+        "🇬🇧 Europe/London": "Europe/London",
+        "🇺🇸 America/New_York": "America/New_York"
+    }
 
 
 
@@ -1800,6 +1844,50 @@ def menu(message):
                 "notifications_choose_time"
             ),
             reply_markup=notification_time_menu(language)
+        )
+    elif message.text in notifications_timezone_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "notifications_choose_timezone"
+            ),
+            reply_markup=notification_timezone_menu(language)
+        )
+
+    elif message.text in notification_timezone_choices:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        timezone_name = notification_timezone_choices[
+            message.text
+        ]
+
+        set_notification_timezone(
+            user_id,
+            timezone_name
+        )
+
+        notification_settings = get_notification_settings(
+            user_id
+        )
+
+        bot.send_message(
+            message.chat.id,
+            get_text(
+                language,
+                "notifications_timezone_saved",
+                timezone=timezone_name
+            ),
+            reply_markup=notifications_menu(
+                language,
+                notification_settings["enabled"]
+            )
         )
 
     elif message.text in notification_time_choices:
