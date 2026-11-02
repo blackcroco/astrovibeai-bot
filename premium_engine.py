@@ -1,5 +1,9 @@
 from weekly_engine import generate_weekly_horoscope
 from premium_daily_engine import generate_premium_daily
+from premium_forecast_engine import (
+    generate_monthly_horoscope,
+    generate_yearly_horoscope
+)
 
 
 # ==================================================
@@ -81,13 +85,24 @@ def generate_daily_plus(sign, language):
 # ==================================================
 # ASTRO MENSUEL
 # ==================================================
-
 def generate_monthly(sign, language):
-    # Le moteur complet sera ajouté ici.
+    content = generate_monthly_horoscope(
+        sign,
+        language
+    )
+
+    if not content:
+        return premium_result(
+            status="error",
+            feature=PREMIUM_MONTHLY
+        )
+
     return premium_result(
-        status="coming_soon",
+        status="success",
+        content=content,
         feature=PREMIUM_MONTHLY
     )
+
 
 
 # ==================================================
@@ -95,11 +110,23 @@ def generate_monthly(sign, language):
 # ==================================================
 
 def generate_yearly(sign, language):
-    # Le moteur complet sera ajouté ici.
+    content = generate_yearly_horoscope(
+        sign,
+        language
+    )
+
+    if not content:
+        return premium_result(
+            status="error",
+            feature=PREMIUM_YEARLY
+        )
+
     return premium_result(
-        status="coming_soon",
+        status="success",
+        content=content,
         feature=PREMIUM_YEARLY
     )
+
 
 
 # ==================================================
