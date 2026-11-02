@@ -8,8 +8,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger AstroVibe notifications
+            - name: Trigger AstroVibe notifications
+        env:
+          NOTIFICATION_SECRET: ${{ secrets.NOTIFICATION_SECRET }}
         run: |
           curl --fail-with-body \
-            -H "X-Notification-Secret: ${{ secrets.NOTIFICATION_SECRET }}" \
+            -H "X-Notification-Secret: ${NOTIFICATION_SECRET}" \
             "https://astrovibeai-bot.onrender.com/notifications/run"
