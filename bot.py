@@ -1090,7 +1090,7 @@ def menu(message):
         "🏆 My Points"
     )
 
-        premium_buttons = (
+    premium_buttons = (
         "💎 Mode Premium",
         "💎 Premium"
     )
