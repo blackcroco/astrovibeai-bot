@@ -296,6 +296,54 @@ def show_premium_locked(message):
         message_text,
         reply_markup=premium_menu(language)
     )
+def get_notification_settings(user_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    notifications_enabled,
+                    notification_time,
+                    timezone,
+                    last_notification_date
+                FROM users
+                WHERE telegram_id = %s
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+    if result:
+        return {
+            "enabled": result[0],
+            "time": result[1],
+            "timezone": result[2],
+            "last_notification_date": result[3]
+        }
+
+    return {
+        "enabled": False,
+        "time": None,
+        "timezone": None,
+        "last_notification_date": None
+    }
+
+
+def set_notifications_enabled(user_id, enabled):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET notifications_enabled = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    enabled,
+                    user_id
+                )
+            )
 
 # ==================================================
 # BONUS QUOTIDIEN
@@ -538,6 +586,53 @@ def language_menu():
     markup.row(
         types.KeyboardButton("🇫🇷 Français"),
         types.KeyboardButton("🇬🇧 English")
+    )
+
+    return markup
+def notifications_menu(language="fr", enabled=False):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True
+    )
+
+    if enabled:
+        toggle_button = get_text(
+            language,
+            "notifications_disable_button"
+        )
+    else:
+        toggle_button = get_text(
+            language,
+            "notifications_enable_button"
+        )
+
+    markup.row(
+        types.KeyboardButton(
+            toggle_button
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(
+                language,
+                "notifications_time_button"
+            )
+        ),
+        types.KeyboardButton(
+            get_text(
+                language,
+                "notifications_timezone_button"
+            )
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(
+                language,
+                "back_button"
+            )
+        )
     )
 
     return markup
@@ -1169,6 +1264,18 @@ def menu(message):
         "❤️ Compatibilité Premium",
         "❤️ Premium Compatibility"
     )
+    premium_notifications_buttons = (
+        "🔔 Notifications",
+    )
+    notifications_enable_buttons = (
+        "🔔 Activer",
+        "🔔 Enable"
+    )
+
+    notifications_disable_buttons = (
+        "🔕 Désactiver",
+        "🔕 Disable"
+    )
 
 
 
@@ -1491,6 +1598,134 @@ def menu(message):
             message.chat.id,
             message_text,
             reply_markup=signs_menu(language)
+        )
+    elif message.text in premium_notifications_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        notification_settings = get_notification_settings(
+            user_id
+        )
+
+        enabled = notification_settings["enabled"]
+        notification_time = notification_settings["time"]
+        user_timezone = notification_settings["timezone"]
+
+        if enabled:
+            status_text = get_text(
+                language,
+                "notifications_on"
+            )
+        else:
+            status_text = get_text(
+                language,
+                "notifications_off"
+            )
+
+        if notification_time:
+            time_text = notification_time.strftime("%H:%M")
+        else:
+            time_text = "08:00"
+
+        if user_timezone:
+            timezone_text = user_timezone
+        else:
+            timezone_text = get_text(
+                language,
+                "notifications_no_timezone"
+            )
+
+        message_text = (
+            get_text(
+                language,
+                "notifications_title"
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "notifications_morning"
+            )
+            + "\n\n"
+            + get_text(
+                language,
+                "notifications_status",
+                status=status_text
+            )
+            + "\n"
+            + get_text(
+                language,
+                "notifications_time",
+                time=time_text
+            )
+            + "\n"
+            + get_text(
+                language,
+                "notifications_timezone",
+                timezone=timezone_text
+            )
+        )
+
+        bot.send_message(
+            message.chat.id,
+            message_text,
+            reply_markup=notifications_menu(
+                language,
+                enabled
+            )
+        )
+    elif message.text in notifications_enable_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        set_notifications_enabled(
+            user_id,
+            True
+        )
+
+        notification_settings = get_notification_settings(
+            user_id
+        )
+
+        bot.send_message(
+            message.chat.id,
+            (
+                "✅ Notifications activées."
+                if language == "fr"
+                else "✅ Notifications enabled."
+            ),
+            reply_markup=notifications_menu(
+                language,
+                notification_settings["enabled"]
+            )
+        )
+
+    elif message.text in notifications_disable_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        set_notifications_enabled(
+            user_id,
+            False
+        )
+
+        notification_settings = get_notification_settings(
+            user_id
+        )
+
+        bot.send_message(
+            message.chat.id,
+            (
+                "🔕 Notifications désactivées."
+                if language == "fr"
+                else "🔕 Notifications disabled."
+            ),
+            reply_markup=notifications_menu(
+                language,
+                notification_settings["enabled"]
+            )
         )
 
     elif message.text in settings_buttons:
