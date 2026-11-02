@@ -254,6 +254,24 @@ def get_user_profile(user_id):
             result = cursor.fetchone()
 
     return result
+def is_premium(user_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT premium
+                FROM users
+                WHERE telegram_id = %s
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+    if result:
+        return bool(result[0])
+
+    return False
 
 
 # ==================================================
