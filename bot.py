@@ -1095,7 +1095,7 @@ def menu(message):
         "💎 Premium"
     )
 
-    premium_week_buttons = (
+        premium_week_buttons = (
         "📆 Ma semaine",
         "📆 My Week"
     )
@@ -1104,6 +1104,17 @@ def menu(message):
         "☀️ Mon Astro du jour +",
         "☀️ My Daily Astro+"
     )
+
+    premium_month_buttons = (
+        "🌙 Mon mois",
+        "🌙 My Month"
+    )
+
+    premium_year_buttons = (
+        "🌟 Mon année",
+        "🌟 My Year"
+    )
+
 
 
     language_buttons = (
@@ -1283,6 +1294,101 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
+    elif message.text in premium_month_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        sign = get_user_sign(user_id)
+
+        result = generate_premium_feature(
+            feature="monthly",
+            sign=sign,
+            language=language,
+            user_id=user_id
+        )
+
+        if result["status"] == "missing_sign":
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        if result["status"] == "success":
+            bot.send_message(
+                message.chat.id,
+                result["content"],
+                reply_markup=premium_menu(language)
+            )
+            return
+
+        error_text = (
+            "Une erreur est survenue pendant la préparation "
+            "de tes prévisions du mois."
+            if language == "fr"
+            else
+            "An error occurred while preparing "
+            "your monthly forecast."
+        )
+
+        bot.send_message(
+            message.chat.id,
+            error_text,
+            reply_markup=premium_menu(language)
+        )
+
+    elif message.text in premium_year_buttons:
+        if not is_premium(user_id):
+            show_premium_locked(message)
+            return
+
+        sign = get_user_sign(user_id)
+
+        result = generate_premium_feature(
+            feature="yearly",
+            sign=sign,
+            language=language,
+            user_id=user_id
+        )
+
+        if result["status"] == "missing_sign":
+            bot.send_message(
+                message.chat.id,
+                get_text(
+                    language,
+                    "need_sign"
+                ),
+                reply_markup=signs_menu(language)
+            )
+            return
+
+        if result["status"] == "success":
+            bot.send_message(
+                message.chat.id,
+                result["content"],
+                reply_markup=premium_menu(language)
+            )
+            return
+
+        error_text = (
+            "Une erreur est survenue pendant la préparation "
+            "de tes prévisions annuelles."
+            if language == "fr"
+            else
+            "An error occurred while preparing "
+            "your yearly forecast."
+        )
+
+        bot.send_message(
+            message.chat.id,
+            error_text,
+            reply_markup=premium_menu(language)
+        )
 
 
     elif message.text in settings_buttons:
