@@ -273,6 +273,27 @@ def is_premium(user_id):
 
     return False
 
+def show_premium_locked(message):
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    message_text = (
+        get_text(
+            language,
+            "premium_locked_title"
+        )
+        + "\n\n"
+        + get_text(
+            language,
+            "premium_locked_text"
+        )
+    )
+
+    bot.send_message(
+        message.chat.id,
+        message_text,
+        reply_markup=premium_menu(language)
+    )
 
 # ==================================================
 # BONUS QUOTIDIEN
@@ -1071,6 +1092,10 @@ def menu(message):
         "💎 Mode Premium",
         "💎 Premium"
     )
+    premium_week_buttons = (
+        "📆 Ma semaine",
+        "📆 My Week"
+    )
 
 
     language_buttons = (
@@ -1152,6 +1177,27 @@ def menu(message):
             reply_markup=premium_menu(language)
         )
 
+    elif message.text in premium_week_buttons:
+        if is_premium(user_id):
+            if language == "en":
+                message_text = (
+                    "📆 My Week\n\n"
+                    "Your Premium weekly forecast is being prepared ✨"
+                )
+            else:
+                message_text = (
+                    "📆 Ma semaine\n\n"
+                    "Tes prévisions Premium de la semaine "
+                    "sont en cours de préparation ✨"
+                )
+
+            bot.send_message(
+                message.chat.id,
+                message_text,
+                reply_markup=premium_menu(language)
+            )
+        else:
+            show_premium_locked(message)
 
     elif message.text in settings_buttons:
         bot.send_message(
