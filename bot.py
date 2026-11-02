@@ -1,6 +1,7 @@
 import os
 import threading
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import psycopg2
 import telebot
@@ -372,6 +373,183 @@ def set_notification_timezone(user_id, timezone_name):
                     user_id
                 )
             )
+def get_notification_candidates():
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    telegram_id,
+                    sign,
+                    language,
+                    notification_time,
+                    timezone,
+                    last_notification_date
+                FROM users
+                WHERE premium = TRUE
+                  AND notifications_enabled = TRUE
+                  AND notification_time IS NOT NULL
+                  AND timezone IS NOT NULL
+                """
+            )
+
+            return cursor.fetchall()
+
+
+def mark_notification_sent(
+    user_id,
+    local_date
+):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET last_notification_date = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    local_date,
+                    user_id
+                )
+            )
+
+
+def build_morning_notification(
+    sign,
+    language
+):
+    if language == "en":
+        display_sign = next(
+            (
+                english_sign
+                for english_sign, french_sign in SIGNS_EN.items()
+                if french_sign == sign
+            ),
+            sign
+        )
+
+        return (
+            "☀️ GOOD MORNING\n\n"
+            f"{display_sign}\n\n"
+            "Your Premium cosmic forecast is ready ✨\n\n"
+            "Discover today's dominant energy, love insights, "
+            "career guidance, opportunities and points of attention.\n\n"
+            "☀️ Open My Daily Astro+ in AstroVibe."
+        )
+
+    return (
+        "☀️ BONJOUR\n\n"
+        f"{sign}\n\n"
+        "Tes prévisions cosmiques Premium sont prêtes ✨\n\n"
+        "Découvre l'énergie dominante de ta journée, "
+        "tes tendances en amour, tes ambitions, "
+        "tes opportunités et tes points de vigilance.\n\n"
+        "☀️ Ouvre Mon Astro du jour + dans AstroVibe."
+    )
+
+
+def run_due_notifications():
+    utc_now = datetime.now(
+        timezone.utc
+    )
+
+    candidates = get_notification_candidates()
+
+    sent_count = 0
+    skipped_count = 0
+    error_count = 0
+
+    for candidate in candidates:
+        (
+            user_id,
+            sign,
+            language,
+            notification_time,
+            timezone_name,
+            last_notification_date
+        ) = candidate
+
+        try:
+            user_timezone = ZoneInfo(
+                timezone_name
+            )
+
+            local_now = utc_now.astimezone(
+                user_timezone
+            )
+
+            local_date = local_now.date()
+
+            local_time = local_now.time().replace(
+                second=0,
+                microsecond=0,
+                tzinfo=None
+            )
+
+            configured_time = notification_time.replace(
+                second=0,
+                microsecond=0
+            )
+
+            if last_notification_date == local_date:
+                skipped_count += 1
+                continue
+
+            if local_time < configured_time:
+                skipped_count += 1
+                continue
+
+            if not sign:
+                skipped_count += 1
+                continue
+
+            if language not in ("fr", "en"):
+                language = "fr"
+
+            message_text = build_morning_notification(
+                sign,
+                language
+            )
+
+            bot.send_message(
+                user_id,
+                message_text,
+                reply_markup=premium_menu(
+                    language
+                )
+            )
+
+            mark_notification_sent(
+                user_id,
+                local_date
+            )
+
+            sent_count += 1
+
+        except ZoneInfoNotFoundError:
+            print(
+                "Invalid notification timezone:",
+                user_id,
+                timezone_name
+            )
+            error_count += 1
+
+        except Exception as error:
+            print(
+                "Notification error:",
+                user_id,
+                str(error)
+            )
+            error_count += 1
+
+    return {
+        "status": "ok",
+        "candidates": len(candidates),
+        "sent": sent_count,
+        "skipped": skipped_count,
+        "errors": error_count
+    }
 
 # ==================================================
 # BONUS QUOTIDIEN
@@ -2010,6 +2188,33 @@ def health():
         "status": "ok",
         "service": "AstroVibe"
     }
+@app.route(
+    "/notifications/run",
+    methods=["GET", "POST"]
+)
+def run_notifications_route():
+    configured_secret = os.getenv(
+        "NOTIFICATION_SECRET"
+    )
+
+    provided_secret = request.headers.get(
+        "X-Notification-Secret"
+    )
+
+    if not configured_secret:
+        return {
+            "status": "error",
+            "message": "Notification secret is not configured."
+        }, 500
+
+    if provided_secret != configured_secret:
+        return {
+            "status": "forbidden"
+        }, 403
+
+    result = run_due_notifications()
+
+    return result, 200
 
 if __name__ == "__main__":
     bot.set_webhook(
