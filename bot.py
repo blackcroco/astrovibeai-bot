@@ -1525,14 +1525,15 @@ def menu(message):
         "❤️ Compatibilité Premium",
         "❤️ Premium Compatibility"
     )
-    premium_notifications_buttons = (
+        premium_notifications_buttons = (
         "🔔 Notifications",
+    )
+
     premium_subscription_buttons = (
         "💎 Mon abonnement",
         "💎 My Subscription"
     )
 
-    )
     notifications_enable_buttons = (
         "🔔 Activer",
         "🔔 Enable"
