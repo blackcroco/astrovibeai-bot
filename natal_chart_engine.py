@@ -826,3 +826,583 @@ def format_planetary_positions(
         + "\n\n"
         + "\n".join(lines)
     )
+# ============================================
+# ASCENDANT ET MAISONS PLACIDUS
+# ============================================
+
+def calculate_house_cusps(
+    jd_ut,
+    birth_time_known,
+    birth_latitude,
+    birth_longitude,
+):
+    if birth_time_known is not True:
+        return {
+            "available": False,
+            "reason": "unknown_birth_time",
+            "system": None,
+            "ascendant": None,
+            "houses": None,
+        }
+
+    if birth_latitude is None:
+        return {
+            "available": False,
+            "reason": "missing_birth_latitude",
+            "system": None,
+            "ascendant": None,
+            "houses": None,
+        }
+
+    if birth_longitude is None:
+        return {
+            "available": False,
+            "reason": "missing_birth_longitude",
+            "system": None,
+            "ascendant": None,
+            "houses": None,
+        }
+
+    latitude = float(
+        birth_latitude
+    )
+
+    longitude = float(
+        birth_longitude
+    )
+
+    if not -90 <= latitude <= 90:
+        raise ValueError(
+            "Invalid birth latitude"
+        )
+
+    if not -180 <= longitude <= 180:
+        raise ValueError(
+            "Invalid birth longitude"
+        )
+
+    raw_cusps = eph.houses(
+        jd_ut,
+        longitude,
+        latitude,
+        eph.HouseSystem.PLACIDUS,
+    )
+
+    if not isinstance(
+        raw_cusps,
+        (list, tuple)
+    ):
+        raise ValueError(
+            "Unsupported houses result format"
+        )
+
+    if len(raw_cusps) != 12:
+        raise ValueError(
+            "Expected 12 house cusps"
+        )
+
+    houses = []
+
+    for house_number, cusp_longitude in enumerate(
+        raw_cusps,
+        start=1,
+    ):
+        zodiac = longitude_to_zodiac(
+            cusp_longitude
+        )
+
+        houses.append(
+            {
+                "house": house_number,
+                "longitude": zodiac[
+                    "longitude"
+                ],
+                "sign": zodiac[
+                    "sign"
+                ],
+                "degree": zodiac[
+                    "degree"
+                ],
+            }
+        )
+
+    ascendant = {
+        "object": "ascendant",
+        "longitude": houses[0][
+            "longitude"
+        ],
+        "sign": houses[0][
+            "sign"
+        ],
+        "degree": houses[0][
+            "degree"
+        ],
+        "house": 1,
+    }
+
+    return {
+        "available": True,
+        "reason": None,
+        "system": "placidus",
+        "ascendant": ascendant,
+        "houses": houses,
+    }
+
+
+# ============================================
+# POSITION D'UNE PLANETE DANS UNE MAISON
+# ============================================
+
+def longitude_in_house(
+    longitude,
+    house_start,
+    house_end,
+):
+    longitude = float(
+        longitude
+    ) % 360.0
+
+    house_start = float(
+        house_start
+    ) % 360.0
+
+    house_end = float(
+        house_end
+    ) % 360.0
+
+    if house_start < house_end:
+        return (
+            house_start
+            <= longitude
+            < house_end
+        )
+
+    return (
+        longitude >= house_start
+        or longitude < house_end
+    )
+
+
+def find_planet_house(
+    longitude,
+    houses,
+):
+    if not houses:
+        return None
+
+    for index, house in enumerate(
+        houses
+    ):
+        next_index = (
+            index + 1
+        ) % len(houses)
+
+        next_house = houses[
+            next_index
+        ]
+
+        if longitude_in_house(
+            longitude=longitude,
+            house_start=house[
+                "longitude"
+            ],
+            house_end=next_house[
+                "longitude"
+            ],
+        ):
+            return house[
+                "house"
+            ]
+
+    return None
+
+
+def assign_planets_to_houses(
+    positions,
+    houses,
+):
+    if not positions or not houses:
+        return positions
+
+    for planet_name, position in positions.items():
+        if not position:
+            continue
+
+        position["house"] = find_planet_house(
+            longitude=position[
+                "longitude"
+            ],
+            houses=houses,
+        )
+
+    return positions
+
+
+# ============================================
+# THEME NATAL COMPLET
+# Cette définition remplace la précédente.
+# ============================================
+
+def calculate_natal_chart(
+    birth_date,
+    birth_time=None,
+    birth_time_known=None,
+    birth_place=None,
+    birth_timezone=None,
+    birth_latitude=None,
+    birth_longitude=None,
+):
+    validation = validate_birth_data(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+        birth_timezone=birth_timezone,
+        birth_latitude=birth_latitude,
+        birth_longitude=birth_longitude,
+    )
+
+    if not validation["valid"]:
+        return {
+            "calculated": False,
+            "errors": validation[
+                "errors"
+            ],
+        }
+
+    chart = create_empty_natal_chart(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+        birth_timezone=birth_timezone,
+        birth_latitude=birth_latitude,
+        birth_longitude=birth_longitude,
+    )
+
+    planetary_data = calculate_planetary_positions(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_timezone=birth_timezone,
+    )
+
+    house_data = calculate_house_cusps(
+        jd_ut=planetary_data[
+            "jd_ut"
+        ],
+        birth_time_known=birth_time_known,
+        birth_latitude=birth_latitude,
+        birth_longitude=birth_longitude,
+    )
+
+    positions = planetary_data[
+        "positions"
+    ]
+
+    if house_data["available"]:
+        positions = assign_planets_to_houses(
+            positions=positions,
+            houses=house_data[
+                "houses"
+            ],
+        )
+
+    chart["positions"] = positions
+
+    chart["planetary_errors"] = planetary_data[
+        "errors"
+    ]
+
+    chart["jd_ut"] = planetary_data[
+        "jd_ut"
+    ]
+
+    chart["jd_tt"] = planetary_data[
+        "jd_tt"
+    ]
+
+    chart["calculation_datetime"] = planetary_data[
+        "calculation_datetime"
+    ]
+
+    chart["time_precision"] = planetary_data[
+        "time_precision"
+    ]
+
+    chart["ascendant"] = house_data[
+        "ascendant"
+    ]
+
+    chart["houses"] = house_data[
+        "houses"
+    ]
+
+    chart["house_system"] = house_data[
+        "system"
+    ]
+
+    chart["houses_available"] = house_data[
+        "available"
+    ]
+
+    chart["houses_unavailable_reason"] = house_data[
+        "reason"
+    ]
+
+    chart["midheaven"] = None
+    chart["calculation_engine"] = "pyephemera"
+    chart["calculated"] = True
+
+    return chart
+
+
+# ============================================
+# AFFICHAGE ASCENDANT ET MAISONS
+# ============================================
+
+def format_houses(
+    chart,
+    language="fr",
+):
+    language = (
+        language
+        if language in ("fr", "en")
+        else "fr"
+    )
+
+    if not chart.get(
+        "calculated"
+    ):
+        if language == "en":
+            return (
+                "❌ The natal chart has not "
+                "been calculated."
+            )
+
+        return (
+            "❌ Le thème natal n'a pas "
+            "été calculé."
+        )
+
+    if not chart.get(
+        "houses_available"
+    ):
+        if language == "en":
+            return (
+                "⬆️ Ascendant and houses are "
+                "not displayed because the exact "
+                "birth time is unknown."
+            )
+
+        return (
+            "⬆️ L'Ascendant et les maisons ne "
+            "sont pas affichés car l'heure exacte "
+            "de naissance est inconnue."
+        )
+
+    ascendant = chart[
+        "ascendant"
+    ]
+
+    ascendant_sign = ascendant[
+        "sign"
+    ]
+
+    ascendant_symbol = ZODIAC_SYMBOLS[
+        ascendant_sign
+    ]
+
+    ascendant_name = ZODIAC_NAMES[
+        language
+    ][
+        ascendant_sign
+    ]
+
+    ascendant_degree = ascendant[
+        "degree"
+    ]
+
+    if language == "en":
+        lines = [
+            "🌌 Ascendant and Placidus houses",
+            "",
+            (
+                "⬆️ Ascendant: "
+                f"{ascendant_symbol} "
+                f"{ascendant_name} "
+                f"{ascendant_degree:.2f}°"
+            ),
+            "",
+        ]
+    else:
+        lines = [
+            "🌌 Ascendant et maisons Placidus",
+            "",
+            (
+                "⬆️ Ascendant : "
+                f"{ascendant_symbol} "
+                f"{ascendant_name} "
+                f"{ascendant_degree:.2f}°"
+            ),
+            "",
+        ]
+
+    for house in chart[
+        "houses"
+    ]:
+        sign_key = house[
+            "sign"
+        ]
+
+        symbol = ZODIAC_SYMBOLS[
+            sign_key
+        ]
+
+        sign_name = ZODIAC_NAMES[
+            language
+        ][
+            sign_key
+        ]
+
+        degree = house[
+            "degree"
+        ]
+
+        house_number = house[
+            "house"
+        ]
+
+        if language == "en":
+            label = (
+                f"House {house_number}"
+            )
+        else:
+            label = (
+                f"Maison {house_number}"
+            )
+
+        lines.append(
+            f"🏠 {label} : "
+            f"{symbol} {sign_name} "
+            f"{degree:.2f}°"
+        )
+
+    return "\n".join(
+        lines
+    )
+
+
+# ============================================
+# AFFICHAGE PLANETES + MAISONS
+# ============================================
+
+def format_planets_with_houses(
+    chart,
+    language="fr",
+):
+    language = (
+        language
+        if language in ("fr", "en")
+        else "fr"
+    )
+
+    if not chart.get(
+        "calculated"
+    ):
+        if language == "en":
+            return (
+                "❌ Planetary positions are "
+                "not available."
+            )
+
+        return (
+            "❌ Les positions planétaires ne "
+            "sont pas disponibles."
+        )
+
+    lines = []
+
+    for planet_name in NATAL_OBJECTS:
+        position = chart[
+            "positions"
+        ].get(
+            planet_name
+        )
+
+        if not position:
+            continue
+
+        label = NATAL_OBJECT_LABELS[
+            language
+        ][
+            planet_name
+        ]
+
+        sign_key = position[
+            "sign"
+        ]
+
+        symbol = ZODIAC_SYMBOLS[
+            sign_key
+        ]
+
+        sign_name = ZODIAC_NAMES[
+            language
+        ][
+            sign_key
+        ]
+
+        degree = position[
+            "degree"
+        ]
+
+        house_number = position.get(
+            "house"
+        )
+
+        if house_number:
+            if language == "en":
+                house_text = (
+                    f" · House {house_number}"
+                )
+            else:
+                house_text = (
+                    f" · Maison {house_number}"
+                )
+        else:
+            house_text = ""
+
+        retrograde = (
+            " ℞"
+            if position.get(
+                "retrograde"
+            )
+            else ""
+        )
+
+        lines.append(
+            f"{label} : "
+            f"{symbol} {sign_name} "
+            f"{degree:.2f}°"
+            f"{retrograde}"
+            f"{house_text}"
+        )
+
+    if language == "en":
+        title = (
+            "🪐 Planets in signs and houses"
+        )
+    else:
+        title = (
+            "🪐 Planètes dans les signes "
+            "et les maisons"
+        )
+
+    return (
+        title
+        + "\n\n"
+        + "\n".join(
+            lines
+        )
+    )
