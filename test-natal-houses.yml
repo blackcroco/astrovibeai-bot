@@ -1,0 +1,104 @@
+name: Test AstroVibe Natal Houses
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-natal-houses:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test exact-time natal calculation
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import (
+              calculate_natal_chart,
+              format_planetary_positions,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          print("Calculated:", chart.get("calculated"))
+          print("Engine:", chart.get("calculation_engine"))
+          print("Time precision:", chart.get("time_precision"))
+          print("Errors:", chart.get("planetary_errors"))
+          print()
+
+          print(
+              format_planetary_positions(
+                  chart,
+                  language="fr"
+              )
+          )
+          PY
+
+      - name: Inspect pyephemera houses
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          import ephemera as eph
+
+          birth_datetime = datetime(
+              2000,
+              8,
+              15,
+              14,
+              35,
+              tzinfo=ZoneInfo("Europe/Paris"),
+          )
+
+          jd_tt, jd_ut = eph.utc_to_jd(
+              birth_datetime
+          )
+
+          houses = eph.houses(
+              jd_ut,
+              -2.76205,
+              47.65688,
+              eph.HouseSystem.PLACIDUS,
+          )
+
+          print("Birth datetime:", birth_datetime)
+          print("JD UT:", jd_ut)
+          print("JD TT:", jd_tt)
+          print()
+          print("HOUSES TYPE:")
+          print(type(houses))
+          print()
+          print("HOUSES RAW RESULT:")
+          print(repr(houses))
+          print()
+          print("AVAILABLE ATTRIBUTES:")
+          print(
+              [
+                  name
+                  for name in dir(houses)
+                  if not name.startswith("_")
+              ]
+          )
+          PY
