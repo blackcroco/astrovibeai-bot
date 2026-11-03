@@ -153,6 +153,62 @@ TRANSLATIONS = {
     "🔔 Notifications personnalisées"
 ),
 "subscription_upgrade": "💎 Passer Premium",
+        # Profil AstroVibe Personnel / Informations de naissance
+        "birth_info_button": "🎂 Mes informations de naissance",
+        "birth_info_title": "🎂 Mes informations de naissance",
+        "birth_info_intro": (
+            "Pour créer ton Profil AstroVibe Personnel, j'ai besoin de quelques informations sur ta naissance.\n\n"
+            "Ces informations permettront de personnaliser ton analyse astrologique."
+        ),
+
+        "birth_date_question": (
+            "📅 Quelle est ta date de naissance ?\n\n"
+            "Envoie-la au format JJ/MM/AAAA.\n"
+            "Exemple : 15/08/1995"
+        ),
+        "birth_date_invalid": (
+            "❌ Je n'ai pas reconnu cette date.\n\n"
+            "Utilise le format JJ/MM/AAAA.\n"
+            "Exemple : 15/08/1995"
+        ),
+
+        "birth_time_question": (
+            "🕐 Connais-tu ton heure de naissance ?\n\n"
+            "Une heure précise permet d'affiner ton profil astrologique."
+        ),
+        "birth_time_known_button": "🕐 Oui, je connais mon heure",
+        "birth_time_unknown_button": "❓ Je ne connais pas mon heure",
+        "birth_time_enter": (
+            "🕐 Envoie ton heure de naissance au format HH:MM.\n\n"
+            "Exemple : 14:35"
+        ),
+        "birth_time_invalid": (
+            "❌ Je n'ai pas reconnu cette heure.\n\n"
+            "Utilise le format HH:MM.\n"
+            "Exemple : 14:35"
+        ),
+
+        "birth_place_question": (
+            "📍 Quel est ton lieu de naissance ?\n\n"
+            "Envoie le nom de ta ville de naissance."
+        ),
+        "birth_place_invalid": (
+            "❌ Je n'ai pas reconnu ce lieu.\n\n"
+            "Envoie simplement le nom de ta ville de naissance."
+        ),
+
+        "birth_info_summary": (
+            "🌌 Récapitulatif de tes informations de naissance\n\n"
+            "📅 Date : {birth_date}\n"
+            "🕐 Heure : {birth_time}\n"
+            "📍 Lieu : {birth_place}"
+        ),
+        "birth_info_confirm_button": "✅ Confirmer",
+        "birth_info_edit_button": "✏️ Modifier",
+        "birth_info_saved": (
+            "✅ Tes informations de naissance ont bien été enregistrées.\n\n"
+            "Elles pourront être utilisées pour créer ton futur Profil AstroVibe Personnel. ✨"
+        ),
 
         # Divers
         "unknown_request": (
@@ -312,6 +368,62 @@ TRANSLATIONS = {
     "🔔 Personalized Notifications"
 ),
 "subscription_upgrade": "💎 Upgrade to Premium",
+        # AstroVibe Personal Profile / Birth Information
+        "birth_info_button": "🎂 My Birth Information",
+        "birth_info_title": "🎂 My Birth Information",
+        "birth_info_intro": (
+            "To create your AstroVibe Personal Profile, I need a few details about your birth.\n\n"
+            "This information will help personalize your astrological analysis."
+        ),
+
+        "birth_date_question": (
+            "📅 What is your date of birth?\n\n"
+            "Send it in DD/MM/YYYY format.\n"
+            "Example: 15/08/1995"
+        ),
+        "birth_date_invalid": (
+            "❌ I couldn't recognize that date.\n\n"
+            "Please use DD/MM/YYYY format.\n"
+            "Example: 15/08/1995"
+        ),
+
+        "birth_time_question": (
+            "🕐 Do you know your birth time?\n\n"
+            "An exact birth time allows for a more detailed astrological profile."
+        ),
+        "birth_time_known_button": "🕐 Yes, I know my birth time",
+        "birth_time_unknown_button": "❓ I don't know my birth time",
+        "birth_time_enter": (
+            "🕐 Send your birth time in HH:MM format.\n\n"
+            "Example: 14:35"
+        ),
+        "birth_time_invalid": (
+            "❌ I couldn't recognize that time.\n\n"
+            "Please use HH:MM format.\n"
+            "Example: 14:35"
+        ),
+
+        "birth_place_question": (
+            "📍 What is your place of birth?\n\n"
+            "Send the name of your birth city."
+        ),
+        "birth_place_invalid": (
+            "❌ I couldn't recognize that place.\n\n"
+            "Simply send the name of your birth city."
+        ),
+
+        "birth_info_summary": (
+            "🌌 Summary of your birth information\n\n"
+            "📅 Date: {birth_date}\n"
+            "🕐 Time: {birth_time}\n"
+            "📍 Place: {birth_place}"
+        ),
+        "birth_info_confirm_button": "✅ Confirm",
+        "birth_info_edit_button": "✏️ Edit",
+        "birth_info_saved": (
+            "✅ Your birth information has been saved.\n\n"
+            "It can be used to create your future AstroVibe Personal Profile. ✨"
+        ),
 
         # Other
         "unknown_request": (
