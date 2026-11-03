@@ -157,6 +157,90 @@ def save_user_sign(user_id, sign):
                 sign,
                 user_id
             ))
+def get_birth_info(user_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    birth_date,
+                    birth_time,
+                    birth_time_known,
+                    birth_place,
+                    birth_timezone,
+                    birth_latitude,
+                    birth_longitude
+                FROM users
+                WHERE telegram_id = %s
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+    if not result:
+        return None
+
+    return {
+        "birth_date": result[0],
+        "birth_time": result[1],
+        "birth_time_known": result[2],
+        "birth_place": result[3],
+        "birth_timezone": result[4],
+        "birth_latitude": result[5],
+        "birth_longitude": result[6],
+    }
+
+
+def has_birth_info(user_id):
+    birth_info = get_birth_info(user_id)
+
+    if not birth_info:
+        return False
+
+    return bool(
+        birth_info["birth_date"]
+        and birth_info["birth_place"]
+        and birth_info["birth_time_known"] is not None
+    )
+
+
+def save_birth_info(
+    user_id,
+    birth_date,
+    birth_time,
+    birth_time_known,
+    birth_place,
+    birth_timezone=None,
+    birth_latitude=None,
+    birth_longitude=None
+):
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET
+                    birth_date = %s,
+                    birth_time = %s,
+                    birth_time_known = %s,
+                    birth_place = %s,
+                    birth_timezone = %s,
+                    birth_latitude = %s,
+                    birth_longitude = %s
+                WHERE telegram_id = %s
+                """,
+                (
+                    birth_date,
+                    birth_time,
+                    birth_time_known,
+                    birth_place,
+                    birth_timezone,
+                    birth_latitude,
+                    birth_longitude,
+                    user_id
+                )
+            )
 
 def get_user_language(user_id):
     with get_db_connection() as conn:
