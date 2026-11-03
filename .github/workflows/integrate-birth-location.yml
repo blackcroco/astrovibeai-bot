@@ -198,21 +198,26 @@ jobs:
           before_confirmation = patched[:confirmation_start]
           confirmation_section = patched[confirmation_start:]
 
+          
           save_pattern = re.compile(
-              r'birth_place=birth_request$$"birth_place"$$'
-              r'(?P<comma>,?)\n'
-              r'(?P<closing>[ \t]+)\)'
+              r'(?ms)'
+              r'^(?P<save_indent>[ \t]+)save_birth_info\(\n'
+              r'.*?'
+              r'^(?P=save_indent)\)\n'
+              r'(?=\n[ \t]*birth_info_requests\.pop)'
           )
 
           save_replacement = (
-              'birth_place=birth_request["birth_place"],\n'
-              r'\g<closing>birth_timezone=birth_request['
-              '"birth_timezone"],\n'
-              r'\g<closing>birth_latitude=birth_request['
-              '"birth_latitude"],\n'
-              r'\g<closing>birth_longitude=birth_request['
-              '"birth_longitude"]\n'
-              r'\g<closing>)'
+              r'\g<save_indent>save_birth_info(\n'
+              r'\g<save_indent>    user_id=user_id,\n'
+              r'\g<save_indent>    birth_date=birth_request["birth_date"],\n'
+              r'\g<save_indent>    birth_time=birth_request["birth_time"],\n'
+              r'\g<save_indent>    birth_time_known=birth_request["birth_time_known"],\n'
+              r'\g<save_indent>    birth_place=birth_request["birth_place"],\n'
+              r'\g<save_indent>    birth_timezone=birth_request["birth_timezone"],\n'
+              r'\g<save_indent>    birth_latitude=birth_request["birth_latitude"],\n'
+              r'\g<save_indent>    birth_longitude=birth_request["birth_longitude"]\n'
+              r'\g<save_indent>)\n'
           )
 
           confirmation_section, save_count = (
