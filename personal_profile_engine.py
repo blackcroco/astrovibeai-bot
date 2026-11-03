@@ -2151,11 +2151,15 @@ SIGN_PROFILES_EN.update({
             "Originality, independence, open-mindedness, collective vision, "
             "and the ability to innovate are among your strongest qualities."
         ),
-        "watchpoints": (
-            "Emotional detachment": (
+                "watchpoints": (
+            "Emotional detachment, automatic opposition, or difficulty expressing "
+            "affection may create more distance than you genuinely intended."
+        ),
+        "balance": (
             "Your balance requires authentic freedom, stimulating exchange, "
             "and a community in which your originality does not need constant defence."
         ),
+
         "growth": (
             "Your potential expands when collective ideals remain connected "
             "to the emotional reality of individual people. Personal involvement "
