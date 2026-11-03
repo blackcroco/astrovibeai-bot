@@ -1,0 +1,55 @@
+name: Test AstroVibe Natal Chart
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-natal-chart:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test natal chart engine
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from natal_chart_engine import (
+              calculate_natal_chart,
+              format_planetary_positions,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=None,
+              birth_time_known=False,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          print("Calculated:", chart.get("calculated"))
+          print("Engine:", chart.get("calculation_engine"))
+          print("Time precision:", chart.get("time_precision"))
+          print("Errors:", chart.get("planetary_errors"))
+          print()
+          print(
+              format_planetary_positions(
+                  chart,
+                  language="fr"
+              )
+          )
+          PY
