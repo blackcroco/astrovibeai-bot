@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch birth location flow
+      - name: Patch and validate birth location flow
         shell: bash
         run: |
           python - <<'PY'
@@ -26,14 +26,26 @@ jobs:
           path = Path("bot.py")
           source = path.read_text(encoding="utf-8")
 
-          pattern = re.compile(
-              r'(?ms)^(?P<indent>[ \t]+)'
-              r'elif step == "birth_place":\n'
-              r'.*?'
-              r'^(?P=indent)elif step == "confirmation":'
+          required_import = (
+              "from birth_location_engine import "
+              "resolve_birth_location, format_location_label"
           )
 
-          match = pattern.search(source)
+          if required_import not in source:
+              raise SystemExit(
+                  "ERROR: birth_location_engine import is missing."
+              )
+
+          birth_place_pattern = re.compile(
+              r'(?ms)'
+              r'^(?P<indent>[ \t]+)'
+              r'elif step == "birth_place":\n'
+              r'.*?'
+              r'(?=^(?P=indent)'
+              r'elif step == "confirmation":)'
+          )
+
+          match = birth_place_pattern.search(source)
 
           if not match:
               raise SystemExit(
@@ -41,151 +53,522 @@ jobs:
               )
 
           indent = match.group("indent")
-          level_1 = indent + "    "
-          level_2 = level_1 + "    "
-          level_3 = level_2 + "    "
-          level_4 = level_3 + "    "
 
-          replacement = f'''{indent}elif step == "birth_place":
-          {level_1}birth_place = message.text.strip()
-
-          {level_1}if len(birth_place) < 2:
-          {level_2}bot.send_message(
-          {level_3}message.chat.id,
-          {level_3}get_text(
-          {level_4}language,
-          {level_4}"birth_place_invalid"
-          {level_3})
-          {level_2})
-
-          {level_1}else:
-          {level_2}location_result = resolve_birth_location(
-          {level_3}birth_place
-          {level_2})
-
-          {level_2}if location_result["status"] == "resolved":
-          {level_3}location = location_result["location"]
-
-          {level_3}birth_request["birth_place"] = (
-          {level_4}f"{{location['name']}}, "
-          {level_4}f"{{location['country_code']}}"
-          {level_3})
-          {level_3}birth_request["birth_timezone"] = (
-          {level_4}location["timezone"]
-          {level_3})
-          {level_3}birth_request["birth_latitude"] = (
-          {level_4}location["latitude"]
-          {level_3})
-          {level_3}birth_request["birth_longitude"] = (
-          {level_4}location["longitude"]
-          {level_3})
-          {level_3}birth_request["step"] = "confirmation"
-
-          {level_3}birth_date_text = birth_request[
-          {level_4}"birth_date"
-          {level_3}].strftime("%d/%m/%Y")
-
-          {level_3}if birth_request["birth_time_known"]:
-          {level_4}birth_time_text = birth_request[
-          {level_4}    "birth_time"
-          {level_4}].strftime("%H:%M")
-          {level_3}else:
-          {level_4}birth_time_text = (
-          {level_4}    "Unknown"
-          {level_4}    if language == "en"
-          {level_4}    else "Inconnue"
-          {level_4})
-
-          {level_3}summary = get_text(
-          {level_4}language,
-          {level_4}"birth_info_summary",
-          {level_4}birth_date=birth_date_text,
-          {level_4}birth_time=birth_time_text,
-          {level_4}birth_place=birth_request[
-          {level_4}    "birth_place"
-          {level_4}]
-          {level_3})
-
-          {level_3}bot.send_message(
-          {level_4}message.chat.id,
-          {level_4}summary,
-          {level_4}reply_markup=birth_info_confirmation_menu(
-          {level_4}    language
-          {level_4})
-          {level_3})
-
-          {level_2}elif location_result["status"] == "ambiguous":
-          {level_3}choices = location_result.get(
-          {level_4}"choices",
-          {level_4}[]
-          {level_3})
-
-          {level_3}choice_lines = [
-          {level_4}f"{{index}}. "
-          {level_4}f"{{format_location_label(location, language)}}"
-          {level_4}for index, location in enumerate(
-          {level_4}    choices,
-          {level_4}    start=1
-          {level_4})
-          {level_3}]
-
-          {level_3}choices_text = "\\n".join(choice_lines)
-
-          {level_3}bot.send_message(
-          {level_4}message.chat.id,
-          {level_4}(
-          {level_4}    "⚠️ Plusieurs lieux correspondent à ce nom.\\n\\n"
-          {level_4}    f"{{choices_text}}\\n\\n"
-          {level_4}    "Précise la ville et le pays."
-          {level_4})
-          {level_4}if language == "fr"
-          {level_4}else (
-          {level_4}    "⚠️ Several locations match that name.\\n\\n"
-          {level_4}    f"{{choices_text}}\\n\\n"
-          {level_4}    "Please enter the city and country."
-          {level_4})
-          {level_3})
-
-          {level_2}elif location_result["status"] == "not_found":
-          {level_3}bot.send_message(
-          {level_4}message.chat.id,
-          {level_4}(
-          {level_4}    "❌ Je n'ai pas trouvé ce lieu. "
-          {level_4}    "Essaie avec la ville et le pays."
-          {level_4})
-          {level_4}if language == "fr"
-          {level_4}else (
-          {level_4}    "❌ I couldn't find that location. "
-          {level_4}    "Try entering the city and country."
-          {level_4})
-          {level_3})
-
-          {level_2}else:
-          {level_3}bot.send_message(
-          {level_4}message.chat.id,
-          {level_4}(
-          {level_4}    "❌ La recherche du lieu est temporairement "
-          {level_4}    "indisponible."
-          {level_4})
-          {level_4}if language == "fr"
-          {level_4}else (
-          {level_4}    "❌ Location search is temporarily unavailable."
-          {level_4})
-          {level_3})
-
-          {indent}elif step == "confirmation":'''
-
-                    patched, count = pattern.subn(
-              lambda match: replacement,
-              source,
-              count=1
-          )
-
-
-          if count != 1:
-              raise SystemExit(
-                  f"ERROR: expected 1 replacement, got {count}."
+          def code_line(level, text=""):
+              return (
+                  indent
+                  + ("    " * level)
+                  + text
               )
+
+          replacement_lines = [
+              code_line(
+                  0,
+                  'elif step == "birth_place":'
+              ),
+              code_line(
+                  1,
+                  "birth_place = message.text.strip()"
+              ),
+              "",
+              code_line(
+                  1,
+                  "if len(birth_place) < 2:"
+              ),
+              code_line(
+                  2,
+                  "bot.send_message("
+              ),
+              code_line(
+                  3,
+                  "message.chat.id,"
+              ),
+              code_line(
+                  3,
+                  "get_text("
+              ),
+              code_line(
+                  4,
+                  "language,"
+              ),
+              code_line(
+                  4,
+                  '"birth_place_invalid"'
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              code_line(
+                  2,
+                  ")"
+              ),
+              "",
+              code_line(
+                  1,
+                  "else:"
+              ),
+              code_line(
+                  2,
+                  "location_result = resolve_birth_location("
+              ),
+              code_line(
+                  3,
+                  "birth_place"
+              ),
+              code_line(
+                  2,
+                  ")"
+              ),
+              "",
+              code_line(
+                  2,
+                  'if location_result["status"] == "resolved":'
+              ),
+              code_line(
+                  3,
+                  'location = location_result["location"]'
+              ),
+              "",
+              code_line(
+                  3,
+                  'birth_request["birth_place"] = ('
+              ),
+              code_line(
+                  4,
+                  'f"{location[\'name\']}, "'
+              ),
+              code_line(
+                  4,
+                  'f"{location[\'country_code\']}"'
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  'birth_request["birth_timezone"] = ('
+              ),
+              code_line(
+                  4,
+                  'location["timezone"]'
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  'birth_request["birth_latitude"] = ('
+              ),
+              code_line(
+                  4,
+                  'location["latitude"]'
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  'birth_request["birth_longitude"] = ('
+              ),
+              code_line(
+                  4,
+                  'location["longitude"]'
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  'birth_request["step"] = "confirmation"'
+              ),
+              "",
+              code_line(
+                  3,
+                  "birth_date_text = birth_request["
+              ),
+              code_line(
+                  4,
+                  '"birth_date"'
+              ),
+              code_line(
+                  3,
+                  '].strftime("%d/%m/%Y")'
+              ),
+              "",
+              code_line(
+                  3,
+                  'if birth_request["birth_time_known"]:'
+              ),
+              code_line(
+                  4,
+                  "birth_time_text = birth_request["
+              ),
+              code_line(
+                  5,
+                  '"birth_time"'
+              ),
+              code_line(
+                  4,
+                  '].strftime("%H:%M")'
+              ),
+              code_line(
+                  3,
+                  "else:"
+              ),
+              code_line(
+                  4,
+                  "birth_time_text = ("
+              ),
+              code_line(
+                  5,
+                  '"Unknown"'
+              ),
+              code_line(
+                  5,
+                  'if language == "en"'
+              ),
+              code_line(
+                  5,
+                  'else "Inconnue"'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  "summary = get_text("
+              ),
+              code_line(
+                  4,
+                  "language,"
+              ),
+              code_line(
+                  4,
+                  '"birth_info_summary",'
+              ),
+              code_line(
+                  4,
+                  "birth_date=birth_date_text,"
+              ),
+              code_line(
+                  4,
+                  "birth_time=birth_time_text,"
+              ),
+              code_line(
+                  4,
+                  "birth_place=birth_request["
+              ),
+              code_line(
+                  5,
+                  '"birth_place"'
+              ),
+              code_line(
+                  4,
+                  "]"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  "bot.send_message("
+              ),
+              code_line(
+                  4,
+                  "message.chat.id,"
+              ),
+              code_line(
+                  4,
+                  "summary,"
+              ),
+              code_line(
+                  4,
+                  "reply_markup=birth_info_confirmation_menu("
+              ),
+              code_line(
+                  5,
+                  "language"
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  2,
+                  'elif location_result["status"] == "ambiguous":'
+              ),
+              code_line(
+                  3,
+                  "choices = location_result.get("
+              ),
+              code_line(
+                  4,
+                  '"choices",'
+              ),
+              code_line(
+                  4,
+                  "[]"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  "choice_lines = []"
+              ),
+              "",
+              code_line(
+                  3,
+                  "for index, location in enumerate("
+              ),
+              code_line(
+                  4,
+                  "choices,"
+              ),
+              code_line(
+                  4,
+                  "start=1"
+              ),
+              code_line(
+                  3,
+                  "):"
+              ),
+              code_line(
+                  4,
+                  "choice_lines.append("
+              ),
+              code_line(
+                  5,
+                  'f"{index}. "'
+              ),
+              code_line(
+                  5,
+                  "f\"{format_location_label("
+              ),
+              code_line(
+                  6,
+                  "location,"
+              ),
+              code_line(
+                  6,
+                  "language"
+              ),
+              code_line(
+                  5,
+                  ")}\""
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  'choices_text = "\\n".join('
+              ),
+              code_line(
+                  4,
+                  "choice_lines"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  'if language == "fr":'
+              ),
+              code_line(
+                  4,
+                  "location_message = ("
+              ),
+              code_line(
+                  5,
+                  '"⚠️ Plusieurs lieux correspondent à ce nom.\\n\\n"'
+              ),
+              code_line(
+                  5,
+                  'f"{choices_text}\\n\\n"'
+              ),
+              code_line(
+                  5,
+                  '"Précise la ville et le pays."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  "else:"
+              ),
+              code_line(
+                  4,
+                  "location_message = ("
+              ),
+              code_line(
+                  5,
+                  '"⚠️ Several locations match that name.\\n\\n"'
+              ),
+              code_line(
+                  5,
+                  'f"{choices_text}\\n\\n"'
+              ),
+              code_line(
+                  5,
+                  '"Please enter the city and country."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              "",
+              code_line(
+                  3,
+                  "bot.send_message("
+              ),
+              code_line(
+                  4,
+                  "message.chat.id,"
+              ),
+              code_line(
+                  4,
+                  "location_message"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  2,
+                  'elif location_result["status"] == "not_found":'
+              ),
+              code_line(
+                  3,
+                  "bot.send_message("
+              ),
+              code_line(
+                  4,
+                  "message.chat.id,"
+              ),
+              code_line(
+                  4,
+                  "("
+              ),
+              code_line(
+                  5,
+                  '"❌ Je n\'ai pas trouvé ce lieu. "'
+              ),
+              code_line(
+                  5,
+                  '"Essaie avec la ville et le pays."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  4,
+                  'if language == "fr"'
+              ),
+              code_line(
+                  4,
+                  "else ("
+              ),
+              code_line(
+                  5,
+                  '"❌ I couldn\'t find that location. "'
+              ),
+              code_line(
+                  5,
+                  '"Try entering the city and country."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+              "",
+              code_line(
+                  2,
+                  "else:"
+              ),
+              code_line(
+                  3,
+                  "bot.send_message("
+              ),
+              code_line(
+                  4,
+                  "message.chat.id,"
+              ),
+              code_line(
+                  4,
+                  "("
+              ),
+              code_line(
+                  5,
+                  '"❌ La recherche du lieu est temporairement "'
+              ),
+              code_line(
+                  5,
+                  '"indisponible."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  4,
+                  'if language == "fr"'
+              ),
+              code_line(
+                  4,
+                  "else ("
+              ),
+              code_line(
+                  5,
+                  '"❌ Location search is temporarily unavailable."'
+              ),
+              code_line(
+                  4,
+                  ")"
+              ),
+              code_line(
+                  3,
+                  ")"
+              ),
+          ]
+
+          replacement = "\n".join(
+              replacement_lines
+          ) + "\n\n"
+
+          patched = (
+              source[:match.start()]
+              + replacement
+              + source[match.end():]
+          )
 
           confirmation_start = patched.find(
               f'{indent}elif step == "confirmation":'
@@ -196,47 +579,100 @@ jobs:
                   "ERROR: confirmation block was not found."
               )
 
-          before_confirmation = patched[:confirmation_start]
-          confirmation_section = patched[confirmation_start:]
+          confirmation_section = patched[
+              confirmation_start:
+          ]
 
-          
           save_pattern = re.compile(
               r'(?ms)'
-              r'^(?P<save_indent>[ \t]+)save_birth_info\(\n'
+              r'^(?P<save_indent>[ \t]+)'
+              r'save_birth_info\(\n'
               r'.*?'
-              r'^(?P=save_indent)\)\n'
-              r'(?=\n[ \t]*birth_info_requests\.pop)'
+              r'^(?P=save_indent)\)'
+              r'(?=\n\n'
+              r'(?P=save_indent)'
+              r'birth_info_requests\.pop)'
           )
 
-          save_replacement = (
-              r'\g<save_indent>save_birth_info(\n'
-              r'\g<save_indent>    user_id=user_id,\n'
-              r'\g<save_indent>    birth_date=birth_request["birth_date"],\n'
-              r'\g<save_indent>    birth_time=birth_request["birth_time"],\n'
-              r'\g<save_indent>    birth_time_known=birth_request["birth_time_known"],\n'
-              r'\g<save_indent>    birth_place=birth_request["birth_place"],\n'
-              r'\g<save_indent>    birth_timezone=birth_request["birth_timezone"],\n'
-              r'\g<save_indent>    birth_latitude=birth_request["birth_latitude"],\n'
-              r'\g<save_indent>    birth_longitude=birth_request["birth_longitude"]\n'
-              r'\g<save_indent>)\n'
+          save_match = save_pattern.search(
+              confirmation_section
           )
 
-          confirmation_section, save_count = (
-              save_pattern.subn(
-                  save_replacement,
-                  confirmation_section,
-                  count=1
-              )
-          )
-
-          if save_count != 1:
+          if not save_match:
               raise SystemExit(
-                  "ERROR: save_birth_info call was not updated."
+                  "ERROR: save_birth_info call was not found."
               )
+
+          save_indent = save_match.group(
+              "save_indent"
+          )
+
+          save_lines = [
+              save_indent + "save_birth_info(",
+              save_indent + "    user_id=user_id,",
+              save_indent + (
+                  '    birth_date=birth_request["birth_date"],'
+              ),
+              save_indent + (
+                  '    birth_time=birth_request["birth_time"],'
+              ),
+              save_indent + (
+                  "    birth_time_known=birth_request["
+              ),
+              save_indent + (
+                  '        "birth_time_known"'
+              ),
+              save_indent + "    ],",
+              save_indent + (
+                  '    birth_place=birth_request["birth_place"],'
+              ),
+              save_indent + (
+                  "    birth_timezone=birth_request["
+              ),
+              save_indent + (
+                  '        "birth_timezone"'
+              ),
+              save_indent + "    ],",
+              save_indent + (
+                  "    birth_latitude=birth_request["
+              ),
+              save_indent + (
+                  '        "birth_latitude"'
+              ),
+              save_indent + "    ],",
+              save_indent + (
+                  "    birth_longitude=birth_request["
+              ),
+              save_indent + (
+                  '        "birth_longitude"'
+              ),
+              save_indent + "    ]",
+              save_indent + ")",
+          ]
+
+          save_replacement = "\n".join(
+              save_lines
+          )
+
+          confirmation_section = (
+              confirmation_section[
+                  :save_match.start()
+              ]
+              + save_replacement
+              + confirmation_section[
+                  save_match.end():
+              ]
+          )
 
           final_source = (
-              before_confirmation
+              patched[:confirmation_start]
               + confirmation_section
+          )
+
+          compile(
+              final_source,
+              "bot.py",
+              "exec"
           )
 
           path.write_text(
@@ -244,18 +680,27 @@ jobs:
               encoding="utf-8"
           )
 
-          print("Birth location integration applied.")
+          print(
+              "Birth location integration applied "
+              "and syntax validated."
+          )
           PY
 
-      - name: Validate Python syntax
+      - name: Validate Python files
         run: |
           python -m py_compile bot.py
           python -m py_compile birth_location_engine.py
           python -m py_compile natal_chart_engine.py
           python -m py_compile personal_profile_engine.py
+          git diff --check
 
       - name: Commit validated integration
         run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bot.py
