@@ -1,0 +1,257 @@
+name: Integrate birth location safely
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-location:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch birth location flow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("bot.py")
+          source = path.read_text(encoding="utf-8")
+
+          pattern = re.compile(
+              r'(?ms)^(?P<indent>[ \t]+)'
+              r'elif step == "birth_place":\n'
+              r'.*?'
+              r'^(?P=indent)elif step == "confirmation":'
+          )
+
+          match = pattern.search(source)
+
+          if not match:
+              raise SystemExit(
+                  "ERROR: birth_place block was not found."
+              )
+
+          indent = match.group("indent")
+          level_1 = indent + "    "
+          level_2 = level_1 + "    "
+          level_3 = level_2 + "    "
+          level_4 = level_3 + "    "
+
+          replacement = f'''{indent}elif step == "birth_place":
+          {level_1}birth_place = message.text.strip()
+
+          {level_1}if len(birth_place) < 2:
+          {level_2}bot.send_message(
+          {level_3}message.chat.id,
+          {level_3}get_text(
+          {level_4}language,
+          {level_4}"birth_place_invalid"
+          {level_3})
+          {level_2})
+
+          {level_1}else:
+          {level_2}location_result = resolve_birth_location(
+          {level_3}birth_place
+          {level_2})
+
+          {level_2}if location_result["status"] == "resolved":
+          {level_3}location = location_result["location"]
+
+          {level_3}birth_request["birth_place"] = (
+          {level_4}f"{{location['name']}}, "
+          {level_4}f"{{location['country_code']}}"
+          {level_3})
+          {level_3}birth_request["birth_timezone"] = (
+          {level_4}location["timezone"]
+          {level_3})
+          {level_3}birth_request["birth_latitude"] = (
+          {level_4}location["latitude"]
+          {level_3})
+          {level_3}birth_request["birth_longitude"] = (
+          {level_4}location["longitude"]
+          {level_3})
+          {level_3}birth_request["step"] = "confirmation"
+
+          {level_3}birth_date_text = birth_request[
+          {level_4}"birth_date"
+          {level_3}].strftime("%d/%m/%Y")
+
+          {level_3}if birth_request["birth_time_known"]:
+          {level_4}birth_time_text = birth_request[
+          {level_4}    "birth_time"
+          {level_4}].strftime("%H:%M")
+          {level_3}else:
+          {level_4}birth_time_text = (
+          {level_4}    "Unknown"
+          {level_4}    if language == "en"
+          {level_4}    else "Inconnue"
+          {level_4})
+
+          {level_3}summary = get_text(
+          {level_4}language,
+          {level_4}"birth_info_summary",
+          {level_4}birth_date=birth_date_text,
+          {level_4}birth_time=birth_time_text,
+          {level_4}birth_place=birth_request[
+          {level_4}    "birth_place"
+          {level_4}]
+          {level_3})
+
+          {level_3}bot.send_message(
+          {level_4}message.chat.id,
+          {level_4}summary,
+          {level_4}reply_markup=birth_info_confirmation_menu(
+          {level_4}    language
+          {level_4})
+          {level_3})
+
+          {level_2}elif location_result["status"] == "ambiguous":
+          {level_3}choices = location_result.get(
+          {level_4}"choices",
+          {level_4}[]
+          {level_3})
+
+          {level_3}choice_lines = [
+          {level_4}f"{{index}}. "
+          {level_4}f"{{format_location_label(location, language)}}"
+          {level_4}for index, location in enumerate(
+          {level_4}    choices,
+          {level_4}    start=1
+          {level_4})
+          {level_3}]
+
+          {level_3}choices_text = "\\n".join(choice_lines)
+
+          {level_3}bot.send_message(
+          {level_4}message.chat.id,
+          {level_4}(
+          {level_4}    "⚠️ Plusieurs lieux correspondent à ce nom.\\n\\n"
+          {level_4}    f"{{choices_text}}\\n\\n"
+          {level_4}    "Précise la ville et le pays."
+          {level_4})
+          {level_4}if language == "fr"
+          {level_4}else (
+          {level_4}    "⚠️ Several locations match that name.\\n\\n"
+          {level_4}    f"{{choices_text}}\\n\\n"
+          {level_4}    "Please enter the city and country."
+          {level_4})
+          {level_3})
+
+          {level_2}elif location_result["status"] == "not_found":
+          {level_3}bot.send_message(
+          {level_4}message.chat.id,
+          {level_4}(
+          {level_4}    "❌ Je n'ai pas trouvé ce lieu. "
+          {level_4}    "Essaie avec la ville et le pays."
+          {level_4})
+          {level_4}if language == "fr"
+          {level_4}else (
+          {level_4}    "❌ I couldn't find that location. "
+          {level_4}    "Try entering the city and country."
+          {level_4})
+          {level_3})
+
+          {level_2}else:
+          {level_3}bot.send_message(
+          {level_4}message.chat.id,
+          {level_4}(
+          {level_4}    "❌ La recherche du lieu est temporairement "
+          {level_4}    "indisponible."
+          {level_4})
+          {level_4}if language == "fr"
+          {level_4}else (
+          {level_4}    "❌ Location search is temporarily unavailable."
+          {level_4})
+          {level_3})
+
+          {indent}elif step == "confirmation":'''
+
+          patched, count = pattern.subn(
+              replacement,
+              source,
+              count=1
+          )
+
+          if count != 1:
+              raise SystemExit(
+                  f"ERROR: expected 1 replacement, got {count}."
+              )
+
+          confirmation_start = patched.find(
+              f'{indent}elif step == "confirmation":'
+          )
+
+          if confirmation_start == -1:
+              raise SystemExit(
+                  "ERROR: confirmation block was not found."
+              )
+
+          before_confirmation = patched[:confirmation_start]
+          confirmation_section = patched[confirmation_start:]
+
+          save_pattern = re.compile(
+              r'birth_place=birth_request$$"birth_place"$$'
+              r'(?P<comma>,?)\n'
+              r'(?P<closing>[ \t]+)\)'
+          )
+
+          save_replacement = (
+              'birth_place=birth_request["birth_place"],\n'
+              r'\g<closing>birth_timezone=birth_request['
+              '"birth_timezone"],\n'
+              r'\g<closing>birth_latitude=birth_request['
+              '"birth_latitude"],\n'
+              r'\g<closing>birth_longitude=birth_request['
+              '"birth_longitude"]\n'
+              r'\g<closing>)'
+          )
+
+          confirmation_section, save_count = (
+              save_pattern.subn(
+                  save_replacement,
+                  confirmation_section,
+                  count=1
+              )
+          )
+
+          if save_count != 1:
+              raise SystemExit(
+                  "ERROR: save_birth_info call was not updated."
+              )
+
+          final_source = (
+              before_confirmation
+              + confirmation_section
+          )
+
+          path.write_text(
+              final_source,
+              encoding="utf-8"
+          )
+
+          print("Birth location integration applied.")
+          PY
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile birth_location_engine.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile personal_profile_engine.py
+
+      - name: Commit validated integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot.py
+          git commit -m "Integrate birth location safely"
+          git push origin HEAD:main
