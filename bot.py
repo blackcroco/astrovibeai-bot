@@ -2448,7 +2448,8 @@ def menu(message):
                     "birth_date"
                 ].strftime("%d/%m/%Y")
 
-                if birth_request["birth_time_known"\]:
+                if birth_request["birth_time_known"]:
+
                     birth_time_text = birth_request[
                         "birth_time"
                     ].strftime("%H:%M")
