@@ -762,11 +762,61 @@ SIGNS_EN = {
 
 compatibility_requests = set()
 premium_compatibility_requests = set()
+birth_info_requests = {}
 
 
 # ==================================================
 # MENUS
 # ==================================================
+def birth_time_choice_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "birth_time_known_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "birth_time_unknown_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "back_button")
+        )
+    )
+
+    return markup
+
+
+def birth_info_confirmation_menu(language="fr"):
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "birth_info_confirm_button")
+        ),
+        types.KeyboardButton(
+            get_text(language, "birth_info_edit_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "back_button")
+        )
+    )
+
+    return markup
 
 
 def main_menu(language="fr"):
