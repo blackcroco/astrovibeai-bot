@@ -2676,12 +2676,7 @@ def menu(message):
                     reply_markup=birth_time_choice_menu(language)
                 )
 
-        elif step == "birth_time":
-            try:
-                parsed_time = datetime.strptime(
-                    message.text.strip(),
-                    "%H:%M"
-                ).time()
+        
 
                 birth_request["birth_time"] = parsed_time
                 birth_request["step"] = "birth_place"
@@ -2697,6 +2692,128 @@ def menu(message):
                     get_text(language, "birth_time_invalid")
                 )
 elif step == "birth_place":
+            birth_place = message.text.strip()
+
+            if len(birth_place) < 2:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_place_invalid"
+                    )
+                )
+
+            else:
+                location_result = resolve_birth_location(
+                    birth_place
+                )
+
+                if location_result["status"] == "resolved":
+                    location = location_result["location"]
+
+                    birth_request["birth_place"] = (
+                        f"{location['name']}, "
+                        f"{location['country_code']}"
+                    )
+                    birth_request["birth_timezone"] = (
+                        location["timezone"]
+                    )
+                    birth_request["birth_latitude"] = (
+                        location["latitude"]
+                    )
+                    birth_request["birth_longitude"] = (
+                        location["longitude"]
+                    )
+                    birth_request["step"] = "confirmation"
+
+                    birth_date_text = birth_request[
+                        "birth_date"
+                    ].strftime("%d/%m/%Y")
+
+                    if birth_request["birth_time_known"]:
+                        birth_time_text = birth_request[
+                            "birth_time"
+                        ].strftime("%H:%M")
+                    else:
+                        birth_time_text = (
+                            "Unknown"
+                            if language == "en"
+                            else "Inconnue"
+                        )
+
+                    summary = get_text(
+                        language,
+                        "birth_info_summary",
+                        birth_date=birth_date_text,
+                        birth_time=birth_time_text,
+                        birth_place=birth_request[
+                            "birth_place"
+                        ]
+                    )
+
+                    bot.send_message(
+                        message.chat.id,
+                        summary,
+                        reply_markup=birth_info_confirmation_menu(
+                            language
+                        )
+                    )
+
+                elif location_result["status"] == "ambiguous":
+                    choices = location_result.get(
+                        "choices",
+                        []
+                    )
+
+                    choice_lines = []
+
+                    for index, location in enumerate(
+                        choices,
+                        start=1
+                    ):
+                        choice_lines.append(
+                            f"{index}. "
+                            f"{format_location_label(location, language)}"
+                        )
+
+                    choices_text = "\n".join(
+                        choice_lines
+                    )
+
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "⚠️ Plusieurs lieux correspondent à ce nom.\n\n"
+                            f"{choices_text}\n\n"
+                            "Précise davantage ton lieu de naissance, "
+        elif step == "birth_time":
+            try:
+                parsed_time = datetime.strptime(
+                    message.text.strip(),
+                    "%H:%M"
+                ).time()
+
+                birth_request["birth_time"] = parsed_time
+                birth_request["step"] = "birth_place"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_place_question"
+                    )
+                )
+
+            except ValueError:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_time_invalid"
+                    )
+                )
+
+        elif step == "birth_place":
             birth_place = message.text.strip()
 
             if len(birth_place) < 2:
@@ -2832,13 +2949,12 @@ elif step == "birth_place":
                         )
                     )
 
-
-        elif step == "confirmation":
+                  elif step == "confirmation":
             if message.text == get_text(
                 language,
                 "birth_info_confirm_button"
             ):
-                
+      
 
                                 save_birth_info(
                     user_id=user_id,
