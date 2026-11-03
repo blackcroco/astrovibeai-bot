@@ -872,6 +872,12 @@ def settings_menu(language="fr"):
 
     markup.row(
         types.KeyboardButton(
+            get_text(language, "birth_info_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
             get_text(language, "premium_subscription_button")
         )
     )
@@ -883,6 +889,7 @@ def settings_menu(language="fr"):
     )
 
     return markup
+
 
 def premium_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
