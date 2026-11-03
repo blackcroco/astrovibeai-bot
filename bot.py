@@ -15,6 +15,7 @@ from compatibility_engine import generate_compatibility
 from compatibility_engine_en import generate_compatibility_en
 from weekly_engine import generate_weekly_horoscope
 from premium_engine import generate_premium_feature
+from personal_profile_engine import generate_personal_profile
 
 from translations import get_text
 
@@ -241,6 +242,101 @@ def save_birth_info(
                     user_id
                 )
             )
+def send_personal_profile(chat_id, user_id):
+    language = get_user_language(user_id)
+    sign = get_user_sign(user_id)
+    birth_info = get_birth_info(user_id)
+
+    if not sign:
+        bot.send_message(
+            chat_id,
+            "❌ Aucun signe astrologique enregistré."
+            if language == "fr"
+            else "❌ No zodiac sign is currently saved."
+        )
+        return
+
+    if not birth_info or not has_birth_info(user_id):
+        bot.send_message(
+            chat_id,
+            (
+                "🎂 Tes informations de naissance sont nécessaires "
+                "pour générer ton Profil AstroVibe Personnel.\n\n"
+                "Va dans ⚙️ Paramètres → "
+                "🎂 Mes informations de naissance."
+            )
+            if language == "fr"
+            else (
+                "🎂 Your birth information is required "
+                "to generate your AstroVibe Personal Profile.\n\n"
+                "Go to ⚙️ Settings → 🎂 My Birth Information."
+            )
+        )
+        return
+
+    try:
+        profile = generate_personal_profile(
+            sign=sign,
+            language=language,
+            birth_date=birth_info["birth_date"],
+            birth_time=birth_info["birth_time"],
+            birth_time_known=birth_info["birth_time_known"],
+            birth_place=birth_info["birth_place"],
+        )
+
+    except ValueError as error:
+        bot.send_message(
+            chat_id,
+            (
+                "❌ Le Profil AstroVibe Personnel n'est pas encore "
+                f"disponible : {error}"
+            )
+            if language == "fr"
+            else (
+                "❌ The AstroVibe Personal Profile is not available "
+                f"yet: {error}"
+            )
+        )
+        return
+
+    profile_sections = profile.split("\n\n")
+
+    current_message = ""
+
+    for section in profile_sections:
+        candidate = (
+            section
+            if not current_message
+            else current_message + "\n\n" + section
+        )
+
+        if len(candidate) > 3500:
+            if current_message:
+                bot.send_message(
+                    chat_id,
+                    current_message
+                )
+
+            current_message = section
+
+        else:
+            current_message = candidate
+
+    if current_message:
+        bot.send_message(
+            chat_id,
+            current_message
+        )
+
+    bot.send_message(
+        chat_id,
+        (
+            "✨ Fin de ton Profil AstroVibe Personnel."
+            if language == "fr"
+            else "✨ End of your AstroVibe Personal Profile."
+        ),
+        reply_markup=settings_menu(language)
+    )
 
 def get_user_language(user_id):
     with get_db_connection() as conn:
