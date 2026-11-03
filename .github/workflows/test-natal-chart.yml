@@ -1,10 +1,10 @@
-name: Test AstroVibe Natal Chart
+name: Test AstroVibe Natal Houses
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-natal-chart:
+  test-natal-houses:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,14 +21,71 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test natal chart engine
+      - name: Test exact birth time
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import (
+              calculate_natal_chart,
+              format_houses,
+              format_planets_with_houses,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          print("=== EXACT BIRTH TIME ===")
+          print("Calculated:", chart.get("calculated"))
+          print("Time precision:", chart.get("time_precision"))
+          print("Houses available:", chart.get("houses_available"))
+          print("House system:", chart.get("house_system"))
+          print("Ascendant:", chart.get("ascendant"))
+          print()
+
+          print(
+              format_houses(
+                  chart,
+                  language="fr"
+              )
+          )
+
+          print()
+          print(
+              format_planets_with_houses(
+                  chart,
+                  language="fr"
+              )
+          )
+
+          assert chart.get("calculated") is True
+          assert chart.get("houses_available") is True
+          assert chart.get("ascendant") is not None
+          assert len(chart.get("houses") or []) == 12
+
+          for planet_name, position in chart["positions"].items():
+              assert position is not None
+              assert position.get("house") is not None
+
+          print()
+          print("✅ Exact-time test passed")
+          PY
+
+      - name: Test unknown birth time protection
         run: |
           python - <<'PY'
           from datetime import date
 
           from natal_chart_engine import (
               calculate_natal_chart,
-              format_planetary_positions,
+              format_houses,
           )
 
           chart = calculate_natal_chart(
@@ -41,15 +98,30 @@ jobs:
               birth_longitude=-2.76205,
           )
 
+          print("=== UNKNOWN BIRTH TIME ===")
           print("Calculated:", chart.get("calculated"))
-          print("Engine:", chart.get("calculation_engine"))
           print("Time precision:", chart.get("time_precision"))
-          print("Errors:", chart.get("planetary_errors"))
+          print("Houses available:", chart.get("houses_available"))
+          print("Ascendant:", chart.get("ascendant"))
+          print("Houses:", chart.get("houses"))
           print()
+
           print(
-              format_planetary_positions(
+              format_houses(
                   chart,
                   language="fr"
               )
           )
+
+          assert chart.get("calculated") is True
+          assert chart.get("houses_available") is False
+          assert chart.get("ascendant") is None
+          assert chart.get("houses") is None
+
+          for position in chart["positions"].values():
+              if position is not None:
+                  assert position.get("house") is None
+
+          print()
+          print("✅ Unknown-time protection passed")
           PY
