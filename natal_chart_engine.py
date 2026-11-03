@@ -330,3 +330,498 @@ def describe_natal_precision(chart, language="fr"):
         precision,
         messages["none"]
     )
+# ============================================
+# CALCUL PLANETAIRE REEL AVEC PYEPHEMERA
+# ============================================
+
+import ephemera as eph
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+PLANET_BODIES = {
+    "sun": "SUN",
+    "moon": "MOON",
+    "mercury": "MERCURY",
+    "venus": "VENUS",
+    "mars": "MARS",
+    "jupiter": "JUPITER",
+    "saturn": "SATURN",
+    "uranus": "URANUS",
+    "neptune": "NEPTUNE",
+    "pluto": "PLUTO",
+}
+# ============================================
+# CONVERSION LONGITUDE -> SIGNE
+# ============================================
+
+def longitude_to_zodiac(longitude):
+    longitude = float(longitude) % 360.0
+
+    sign_index = int(
+        longitude // 30
+    )
+
+    sign = ZODIAC_SIGNS[
+        sign_index
+    ]
+
+    degree = longitude % 30.0
+
+    return {
+        "sign": sign,
+        "degree": degree,
+        "longitude": longitude,
+    }
+
+
+# ============================================
+# EXTRACTION D'UNE POSITION PLANETAIRE
+# ============================================
+
+def extract_position_values(position_result):
+    if hasattr(position_result, "longitude"):
+        longitude = float(
+            position_result.longitude
+        )
+
+        latitude = getattr(
+            position_result,
+            "latitude",
+            None
+        )
+
+        distance = getattr(
+            position_result,
+            "distance",
+            None
+        )
+
+        speed = getattr(
+            position_result,
+            "speed",
+            None
+        )
+
+        return {
+            "longitude": longitude,
+            "latitude": latitude,
+            "distance": distance,
+            "speed": speed,
+        }
+
+    if isinstance(
+        position_result,
+        (tuple, list)
+    ):
+        if not position_result:
+            raise ValueError(
+                "Empty planetary position"
+            )
+
+        return {
+            "longitude": float(
+                position_result[0]
+            ),
+            "latitude": (
+                position_result[1]
+                if len(position_result) > 1
+                else None
+            ),
+            "distance": (
+                position_result[2]
+                if len(position_result) > 2
+                else None
+            ),
+            "speed": (
+                position_result[3]
+                if len(position_result) > 3
+                else None
+            ),
+        }
+
+    try:
+        return {
+            "longitude": float(
+                position_result
+            ),
+            "latitude": None,
+            "distance": None,
+            "speed": None,
+        }
+
+    except (TypeError, ValueError):
+        raise ValueError(
+            "Unsupported planetary position format"
+        )
+
+
+# ============================================
+# DATETIME DE NAISSANCE
+# ============================================
+
+def build_birth_datetime(
+    birth_date,
+    birth_time=None,
+    birth_time_known=None,
+    birth_timezone=None,
+):
+    if not birth_date:
+        raise ValueError(
+            "Birth date is required"
+        )
+
+    if not birth_timezone:
+        raise ValueError(
+            "Birth timezone is required"
+        )
+
+    try:
+        timezone = ZoneInfo(
+            birth_timezone
+        )
+
+    except ZoneInfoNotFoundError as error:
+        raise ValueError(
+            "Invalid birth timezone"
+        ) from error
+
+    if (
+        birth_time_known is True
+        and birth_time is not None
+    ):
+        calculation_time = birth_time
+        time_precision = "exact"
+
+    else:
+        calculation_time = time(
+            12,
+            0
+        )
+        time_precision = "unknown_noon_reference"
+
+    local_datetime = datetime.combine(
+        birth_date,
+        calculation_time
+    ).replace(
+        tzinfo=timezone
+    )
+
+    return {
+        "datetime": local_datetime,
+        "time_precision": time_precision,
+    }
+
+
+# ============================================
+# JOUR JULIEN
+# ============================================
+
+def calculate_birth_julian_day(
+    birth_date,
+    birth_time=None,
+    birth_time_known=None,
+    birth_timezone=None,
+):
+    birth_datetime_data = build_birth_datetime(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_timezone=birth_timezone,
+    )
+
+    local_datetime = birth_datetime_data[
+        "datetime"
+    ]
+
+    jd_tt, jd_ut = eph.utc_to_jd(
+        local_datetime
+    )
+
+    return {
+        "jd_tt": jd_tt,
+        "jd_ut": jd_ut,
+        "datetime": local_datetime,
+        "time_precision": birth_datetime_data[
+            "time_precision"
+        ],
+    }
+
+
+# ============================================
+# CALCUL D'UNE PLANETE
+# ============================================
+
+def calculate_planet_position(
+    planet_name,
+    jd_ut,
+):
+    body_name = PLANET_BODIES.get(
+        planet_name
+    )
+
+    if not body_name:
+        raise ValueError(
+            f"Unsupported planet: {planet_name}"
+        )
+
+    body = getattr(
+        eph.Body,
+        body_name,
+        None
+    )
+
+    if body is None:
+        raise ValueError(
+            f"Planet unavailable: {planet_name}"
+        )
+
+    raw_position = eph.position(
+        body,
+        jd_ut
+    )
+
+    values = extract_position_values(
+        raw_position
+    )
+
+    zodiac = longitude_to_zodiac(
+        values["longitude"]
+    )
+
+    speed = values.get(
+        "speed"
+    )
+
+    retrograde = (
+        speed is not None
+        and speed < 0
+    )
+
+    return {
+        "object": planet_name,
+        "sign": zodiac["sign"],
+        "degree": zodiac["degree"],
+        "longitude": zodiac["longitude"],
+        "latitude": values["latitude"],
+        "distance": values["distance"],
+        "speed": speed,
+        "retrograde": retrograde,
+        "house": None,
+    }
+
+
+# ============================================
+# CALCUL DES PLANETES
+# ============================================
+
+def calculate_planetary_positions(
+    birth_date,
+    birth_time=None,
+    birth_time_known=None,
+    birth_timezone=None,
+):
+    julian_data = calculate_birth_julian_day(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_timezone=birth_timezone,
+    )
+
+    jd_ut = julian_data[
+        "jd_ut"
+    ]
+
+    positions = {}
+    errors = {}
+
+    for planet_name in NATAL_OBJECTS:
+        try:
+            positions[
+                planet_name
+            ] = calculate_planet_position(
+                planet_name,
+                jd_ut
+            )
+
+        except Exception as error:
+            positions[
+                planet_name
+            ] = None
+
+            errors[
+                planet_name
+            ] = str(error)
+
+    return {
+        "positions": positions,
+        "errors": errors,
+        "jd_ut": julian_data["jd_ut"],
+        "jd_tt": julian_data["jd_tt"],
+        "calculation_datetime": julian_data[
+            "datetime"
+        ],
+        "time_precision": julian_data[
+            "time_precision"
+        ],
+    }
+
+
+# ============================================
+# CALCUL DU THEME NATAL
+# ============================================
+
+def calculate_natal_chart(
+    birth_date,
+    birth_time=None,
+    birth_time_known=None,
+    birth_place=None,
+    birth_timezone=None,
+    birth_latitude=None,
+    birth_longitude=None,
+):
+    validation = validate_birth_data(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+        birth_timezone=birth_timezone,
+        birth_latitude=birth_latitude,
+        birth_longitude=birth_longitude,
+    )
+
+    if not validation["valid"\]:
+        return {
+            "calculated": False,
+            "errors": validation[
+                "errors"
+            ],
+        }
+
+    chart = create_empty_natal_chart(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+        birth_timezone=birth_timezone,
+        birth_latitude=birth_latitude,
+        birth_longitude=birth_longitude,
+    )
+
+    planetary_data = calculate_planetary_positions(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_timezone=birth_timezone,
+    )
+
+    chart["positions"] = planetary_data[
+        "positions"
+    ]
+
+    chart["planetary_errors"] = planetary_data[
+        "errors"
+    ]
+
+    chart["jd_ut"] = planetary_data[
+        "jd_ut"
+    ]
+
+    chart["jd_tt"] = planetary_data[
+        "jd_tt"
+    ]
+
+    chart["calculation_datetime"] = planetary_data[
+        "calculation_datetime"
+    ]
+
+    chart["time_precision"] = planetary_data[
+        "time_precision"
+    ]
+
+    chart["calculation_engine"] = "pyephemera"
+    chart["calculated"] = True
+
+    return chart
+
+
+# ============================================
+# AFFICHAGE POUR LES TESTS
+# ============================================
+
+def format_planetary_positions(
+    chart,
+    language="fr",
+):
+    language = (
+        language
+        if language in ("fr", "en")
+        else "fr"
+    )
+
+    if not chart.get("calculated"):
+        if language == "en":
+            return (
+                "❌ Natal chart calculation "
+                "is not available."
+            )
+
+        return (
+            "❌ Le calcul du thème natal "
+            "n'est pas disponible."
+        )
+
+    lines = []
+
+    for planet_name in NATAL_OBJECTS:
+        position = chart[
+            "positions"
+        ].get(
+            planet_name
+        )
+
+        if not position:
+            continue
+
+        label = NATAL_OBJECT_LABELS[
+            language
+        ][planet_name]
+
+        sign_key = position[
+            "sign"
+        ]
+
+        sign_name = ZODIAC_NAMES[
+            language
+        ][sign_key]
+
+        symbol = ZODIAC_SYMBOLS[
+            sign_key
+        ]
+
+        degree = position[
+            "degree"
+        ]
+
+        retrograde = (
+            " ℞"
+            if position["retrograde"]
+            else ""
+        )
+
+        lines.append(
+            f"{label} : "
+            f"{symbol} {sign_name} "
+            f"{degree:.2f}°"
+            f"{retrograde}"
+        )
+
+    if language == "en":
+        title = "🌌 Planetary birth positions"
+    else:
+        title = (
+            "🌌 Positions planétaires de naissance"
+        )
+
+    return (
+        title
+        + "\n\n"
+        + "\n".join(lines)
+    )
