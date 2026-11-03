@@ -2696,8 +2696,7 @@ def menu(message):
                     message.chat.id,
                     get_text(language, "birth_time_invalid")
                 )
-
-                elif step == "birth_place":
+elif step == "birth_place":
             birth_place = message.text.strip()
 
             if len(birth_place) < 2:
