@@ -2323,6 +2323,229 @@ def menu(message):
             ),
             reply_markup=settings_menu(language)
         )
+    elif message.text == get_text(language, "birth_info_button"):
+        birth_info_requests[user_id] = {
+            "step": "birth_date",
+            "birth_date": None,
+            "birth_time": None,
+            "birth_time_known": None,
+            "birth_place": None,
+        }
+
+        bot.send_message(
+            message.chat.id,
+            get_text(language, "birth_info_intro")
+            + "\n\n"
+            + get_text(language, "birth_date_question")
+        )
+
+    elif user_id in birth_info_requests:
+        birth_request = birth_info_requests[user_id]
+        step = birth_request.get("step")
+
+        if message.text == get_text(language, "back_button"):
+            birth_info_requests.pop(user_id, None)
+
+            bot.send_message(
+                message.chat.id,
+                get_text(language, "settings_title"),
+                reply_markup=settings_menu(language)
+            )
+
+        elif step == "birth_date":
+            try:
+                parsed_date = datetime.strptime(
+                    message.text.strip(),
+                    "%d/%m/%Y"
+                ).date()
+
+                if parsed_date > datetime.now().date():
+                    raise ValueError
+
+                birth_request["birth_date"] = parsed_date
+                birth_request["step"] = "birth_time_choice"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_time_question"),
+                    reply_markup=birth_time_choice_menu(language)
+                )
+
+            except ValueError:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_date_invalid")
+                )
+
+        elif step == "birth_time_choice":
+            if message.text == get_text(
+                language,
+                "birth_time_known_button"
+            ):
+                birth_request["birth_time_known"] = True
+                birth_request["step"] = "birth_time"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_time_enter")
+                )
+
+            elif message.text == get_text(
+                language,
+                "birth_time_unknown_button"
+            ):
+                birth_request["birth_time_known"] = False
+                birth_request["birth_time"] = None
+                birth_request["step"] = "birth_place"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_place_question")
+                )
+
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_time_question"),
+                    reply_markup=birth_time_choice_menu(language)
+                )
+
+        elif step == "birth_time":
+            try:
+                parsed_time = datetime.strptime(
+                    message.text.strip(),
+                    "%H:%M"
+                ).time()
+
+                birth_request["birth_time"] = parsed_time
+                birth_request["step"] = "birth_place"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_place_question")
+                )
+
+            except ValueError:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_time_invalid")
+                )
+
+        elif step == "birth_place":
+            birth_place = message.text.strip()
+
+            if len(birth_place) < 2:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_place_invalid")
+                )
+
+            else:
+                birth_request["birth_place"] = birth_place
+                birth_request["step"] = "confirmation"
+
+                birth_date_text = birth_request[
+                    "birth_date"
+                ].strftime("%d/%m/%Y")
+
+                if birth_request["birth_time_known"\]:
+                    birth_time_text = birth_request[
+                        "birth_time"
+                    ].strftime("%H:%M")
+                else:
+                    birth_time_text = (
+                        "Unknown"
+                        if language == "en"
+                        else "Inconnue"
+                    )
+
+                summary = get_text(
+                    language,
+                    "birth_info_summary",
+                    birth_date=birth_date_text,
+                    birth_time=birth_time_text,
+                    birth_place=birth_request["birth_place"]
+                )
+
+                bot.send_message(
+                    message.chat.id,
+                    summary,
+                    reply_markup=birth_info_confirmation_menu(
+                        language
+                    )
+                )
+
+        elif step == "confirmation":
+            if message.text == get_text(
+                language,
+                "birth_info_confirm_button"
+            ):
+                save_birth_info(
+                    user_id=user_id,
+                    birth_date=birth_request["birth_date"],
+                    birth_time=birth_request["birth_time"],
+                    birth_time_known=birth_request[
+                        "birth_time_known"
+                    ],
+                    birth_place=birth_request["birth_place"]
+                )
+
+                birth_info_requests.pop(user_id, None)
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_info_saved"),
+                    reply_markup=settings_menu(language)
+                )
+
+            elif message.text == get_text(
+                language,
+                "birth_info_edit_button"
+            ):
+                birth_info_requests[user_id] = {
+                    "step": "birth_date",
+                    "birth_date": None,
+                    "birth_time": None,
+                    "birth_time_known": None,
+                    "birth_place": None,
+                }
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(language, "birth_date_question")
+                )
+
+            else:
+                birth_date_text = birth_request[
+                    "birth_date"
+                ].strftime("%d/%m/%Y")
+
+                if birth_request["birth_time_known"\]:
+                    birth_time_text = birth_request[
+                        "birth_time"
+                    ].strftime("%H:%M")
+                else:
+                    birth_time_text = (
+                        "Unknown"
+                        if language == "en"
+                        else "Inconnue"
+                    )
+
+                summary = get_text(
+                    language,
+                    "birth_info_summary",
+                    birth_date=birth_date_text,
+                    birth_time=birth_time_text,
+                    birth_place=birth_request["birth_place"]
+                )
+
+                bot.send_message(
+                    message.chat.id,
+                    summary,
+                    reply_markup=birth_info_confirmation_menu(
+                        language
+                    )
+                )
 
     elif message.text in back_buttons:
         bot.send_message(
