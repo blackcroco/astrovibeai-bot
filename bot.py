@@ -1171,11 +1171,41 @@ def signs_menu(language="fr"):
 
     return markup
 
+# ============================================
+# TEST TEMPORAIRE DU PROFIL ASTROVIBE
+# ============================================
+
+@bot.message_handler(commands=["profile_test"])
+def profile_test(message):
+    create_or_update_user(message)
+
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    if language != "fr":
+        bot.send_message(
+            message.chat.id,
+            "🇫🇷 Le test du Profil AstroVibe est actuellement disponible en français uniquement."
+        )
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "✨ Génération de ton Profil AstroVibe Personnel..."
+    )
+
+    send_personal_profile(
+        message.chat.id,
+        user_id
+    )
 
 
-# ==================================================
+# ============================================
 # START
-# ==================================================
+# ============================================
+
+
+
 
 @bot.message_handler(commands=["start"])
 def start(message):
