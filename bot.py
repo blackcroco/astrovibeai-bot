@@ -2697,73 +2697,185 @@ def menu(message):
                     get_text(language, "birth_time_invalid")
                 )
 
-        elif step == "birth_place":
+                elif step == "birth_place":
             birth_place = message.text.strip()
 
             if len(birth_place) < 2:
                 bot.send_message(
                     message.chat.id,
-                    get_text(language, "birth_place_invalid")
+                    get_text(
+                        language,
+                        "birth_place_invalid"
+                    )
                 )
 
             else:
-                birth_request["birth_place"] = birth_place
-                birth_request["step"] = "confirmation"
+                location_result = resolve_birth_location(
+                    birth_place
+                )
 
-                birth_date_text = birth_request[
-                    "birth_date"
-                ].strftime("%d/%m/%Y")
+                if location_result["status"] == "resolved":
+                    location = location_result["location"]
 
-                if birth_request["birth_time_known"]:
+                    birth_request["birth_place"] = (
+                        f"{location['name']}, "
+                        f"{location['country_code']}"
+                    )
+                    birth_request["birth_timezone"] = (
+                        location["timezone"]
+                    )
+                    birth_request["birth_latitude"] = (
+                        location["latitude"]
+                    )
+                    birth_request["birth_longitude"] = (
+                        location["longitude"]
+                    )
+                    birth_request["step"] = "confirmation"
 
-                    birth_time_text = birth_request[
-                        "birth_time"
-                    ].strftime("%H:%M")
+                    birth_date_text = birth_request[
+                        "birth_date"
+                    ].strftime("%d/%m/%Y")
+
+                    if birth_request["birth_time_known"]:
+                        birth_time_text = birth_request[
+                            "birth_time"
+                        ].strftime("%H:%M")
+                    else:
+                        birth_time_text = (
+                            "Unknown"
+                            if language == "en"
+                            else "Inconnue"
+                        )
+
+                    summary = get_text(
+                        language,
+                        "birth_info_summary",
+                        birth_date=birth_date_text,
+                        birth_time=birth_time_text,
+                        birth_place=birth_request[
+                            "birth_place"
+                        ]
+                    )
+
+                    bot.send_message(
+                        message.chat.id,
+                        summary,
+                        reply_markup=birth_info_confirmation_menu(
+                            language
+                        )
+                    )
+
+                elif location_result["status"] == "ambiguous":
+                    choices = location_result.get(
+                        "choices",
+                        []
+                    )
+
+                    choice_lines = []
+
+                    for index, location in enumerate(
+                        choices,
+                        start=1
+                    ):
+                        choice_lines.append(
+                            f"{index}. "
+                            f"{format_location_label(location, language)}"
+                        )
+
+                    choices_text = "\n".join(
+                        choice_lines
+                    )
+
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "⚠️ Plusieurs lieux correspondent à ce nom.\n\n"
+                            f"{choices_text}\n\n"
+                            "Précise davantage ton lieu de naissance, "
+                            "par exemple : Paris, France."
+                        )
+                        if language == "fr"
+                        else (
+                            "⚠️ Several locations match that name.\n\n"
+                            f"{choices_text}\n\n"
+                            "Please make your birth place more precise, "
+                            "for example: Paris, France."
+                        )
+                    )
+
+                elif location_result["status"] == "not_found":
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "❌ Je n'ai pas trouvé ce lieu.\n\n"
+                            "Essaie avec le nom de la ville et le pays, "
+                            "par exemple : Paris, France."
+                        )
+                        if language == "fr"
+                        else (
+                            "❌ I couldn't find that location.\n\n"
+                            "Try entering the city and country, "
+                            "for example: Paris, France."
+                        )
+                    )
+
                 else:
-                    birth_time_text = (
-                        "Unknown"
-                        if language == "en"
-                        else "Inconnue"
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "❌ La recherche du lieu est temporairement "
+                            "indisponible. Réessaie dans quelques instants."
+                        )
+                        if language == "fr"
+                        else (
+                            "❌ Location search is temporarily unavailable. "
+                            "Please try again in a moment."
+                        )
                     )
 
-                summary = get_text(
-                    language,
-                    "birth_info_summary",
-                    birth_date=birth_date_text,
-                    birth_time=birth_time_text,
-                    birth_place=birth_request["birth_place"]
-                )
-
-                bot.send_message(
-                    message.chat.id,
-                    summary,
-                    reply_markup=birth_info_confirmation_menu(
-                        language
-                    )
-                )
 
         elif step == "confirmation":
             if message.text == get_text(
                 language,
                 "birth_info_confirm_button"
             ):
-                save_birth_info(
+                
+
+                                save_birth_info(
                     user_id=user_id,
                     birth_date=birth_request["birth_date"],
                     birth_time=birth_request["birth_time"],
                     birth_time_known=birth_request[
                         "birth_time_known"
                     ],
-                    birth_place=birth_request["birth_place"]
+                    birth_place=birth_request["birth_place"],
+                    birth_timezone=birth_request[
+                        "birth_timezone"
+                    ],
+                    birth_latitude=birth_request[
+                        "birth_latitude"
+                    ],
+                    birth_longitude=birth_request[
+                        "birth_longitude"
+                    ]
                 )
 
-                birth_info_requests.pop(user_id, None)
+                birth_info_requests.pop(
+                    user_id,
+                    None
+                )
 
                 bot.send_message(
                     message.chat.id,
-                    get_text(language, "birth_info_saved"),
-                    reply_markup=settings_menu(language)
+                    get_text(
+                        language,
+                        "birth_info_saved"
+                    ),
+                    reply_markup=settings_menu(
+                        language
+                    )
                 )
+
 
             elif message.text == get_text(
                 language,
