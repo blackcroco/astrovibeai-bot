@@ -687,7 +687,8 @@ def calculate_natal_chart(
         birth_longitude=birth_longitude,
     )
 
-    if not validation["valid"\]:
+    if not validation["valid"]:
+
         return {
             "calculated": False,
             "errors": validation[
