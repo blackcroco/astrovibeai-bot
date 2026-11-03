@@ -726,7 +726,19 @@ def settings_menu(language="fr"):
 
     markup.row(
         types.KeyboardButton(
+            get_text(language, "settings_sign_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
             get_text(language, "language_button")
+        )
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            get_text(language, "premium_subscription_button")
         )
     )
 
@@ -737,6 +749,7 @@ def settings_menu(language="fr"):
     )
 
     return markup
+
 def premium_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True
