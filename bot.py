@@ -1585,6 +1585,11 @@ def menu(message):
         "🌍 Langue",
         "🌍 Language"
     )
+    settings_sign_buttons = (
+        "♈ Mon signe",
+        "♈ My Zodiac Sign"
+    )
+
     settings_buttons = (
         "⚙️ Paramètres",
         "⚙️ Settings"
@@ -2193,6 +2198,33 @@ def menu(message):
                 "what_today"
             ),
             reply_markup=main_menu(language)
+        )
+    elif message.text in settings_sign_buttons:
+        current_sign = get_user_sign(user_id)
+
+        if current_sign:
+            if language == "en":
+                display_sign = next(
+                    (
+                        english_sign
+                        for english_sign, french_sign in SIGNS_EN.items()
+                        if french_sign == current_sign
+                    ),
+                    current_sign
+                )
+                message_text = f"♈ Your current zodiac sign: {display_sign}\n\nChoose your new zodiac sign:"
+            else:
+                message_text = f"♈ Ton signe actuel : {current_sign}\n\nChoisis ton nouveau signe :"
+        else:
+            if language == "en":
+                message_text = "♈ Choose your zodiac sign:"
+            else:
+                message_text = "♈ Choisis ton signe astrologique :"
+
+        bot.send_message(
+            message.chat.id,
+            message_text,
+            reply_markup=signs_menu(language)
         )
 
     elif message.text in language_buttons:
