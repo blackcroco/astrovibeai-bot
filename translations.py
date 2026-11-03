@@ -7,7 +7,7 @@ TRANSLATIONS = {
         "premium_button": "💎 Mode Premium",
         "points_button": "🏆 Mes points",
 
-        
+"settings_sign_button": "♈ Mon signe",
 "language_button": "🌍 Langue",
 "settings_button": "⚙️ Paramètres",
 "settings_title": "⚙️ Paramètres AstroVibe",
@@ -169,6 +169,7 @@ TRANSLATIONS = {
 "bonus_button": "⭐ Daily Bonus",
 "premium_button": "💎 Premium",
 "points_button": "🏆 My Points",
+"settings_sign_button": "♈ My Zodiac Sign",
 "language_button": "🌍 Language",
 "settings_button": "⚙️ Settings",
 "settings_title": "⚙️ AstroVibe Settings",
