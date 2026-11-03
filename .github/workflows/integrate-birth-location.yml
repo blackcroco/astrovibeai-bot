@@ -175,11 +175,12 @@ jobs:
 
           {indent}elif step == "confirmation":'''
 
-          patched, count = pattern.subn(
-              replacement,
+                    patched, count = pattern.subn(
+              lambda match: replacement,
               source,
               count=1
           )
+
 
           if count != 1:
               raise SystemExit(
