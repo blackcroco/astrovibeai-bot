@@ -2678,19 +2678,34 @@ def menu(message):
 
         
 
+     elif step == "birth_time":
+            try:
+                parsed_time = datetime.strptime(
+                    message.text.strip(),
+                    "%H:%M"
+                ).time()
+
                 birth_request["birth_time"] = parsed_time
                 birth_request["step"] = "birth_place"
 
                 bot.send_message(
                     message.chat.id,
-                    get_text(language, "birth_place_question")
+                    get_text(
+                        language,
+                        "birth_place_question"
+                    )
                 )
 
             except ValueError:
                 bot.send_message(
                     message.chat.id,
-                    get_text(language, "birth_time_invalid")
+                    get_text(
+                        language,
+                        "birth_time_invalid"
+                    )
                 )
+
+
 elif step == "birth_place":
             birth_place = message.text.strip()
 
@@ -2724,6 +2739,115 @@ elif step == "birth_place":
                     birth_request["birth_longitude"] = (
                         location["longitude"]
                     )
+                    birth_request["step"] = "confirmation"
+        elif step == "birth_time_choice":
+            if message.text == get_text(
+                language,
+                "birth_time_known_button"
+            ):
+                birth_request["birth_time_known"] = True
+                birth_request["step"] = "birth_time"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_time_enter"
+                    )
+                )
+
+            elif message.text == get_text(
+                language,
+                "birth_time_unknown_button"
+            ):
+                birth_request["birth_time_known"] = False
+                birth_request["birth_time"] = None
+                birth_request["step"] = "birth_place"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_place_question"
+                    )
+                )
+
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_time_question"
+                    ),
+                    reply_markup=birth_time_choice_menu(
+                        language
+                    )
+                )
+
+        elif step == "birth_time":
+            try:
+                parsed_time = datetime.strptime(
+                    message.text.strip(),
+                    "%H:%M"
+                ).time()
+
+                birth_request["birth_time"] = parsed_time
+                birth_request["step"] = "birth_place"
+
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_place_question"
+                    )
+                )
+
+            except ValueError:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_time_invalid"
+                    )
+                )
+
+        elif step == "birth_place":
+            birth_place = message.text.strip()
+
+            if len(birth_place) < 2:
+                bot.send_message(
+                    message.chat.id,
+                    get_text(
+                        language,
+                        "birth_place_invalid"
+                    )
+                )
+
+            else:
+                location_result = resolve_birth_location(
+                    birth_place
+                )
+
+                if location_result["status"] == "resolved":
+                    location = location_result["location"]
+
+                    birth_request["birth_place"] = (
+                        f"{location['name']}, "
+                        f"{location['country_code']}"
+                    )
+
+                    birth_request["birth_timezone"] = (
+                        location["timezone"]
+                    )
+
+                    birth_request["birth_latitude"] = (
+                        location["latitude"]
+                    )
+
+                    birth_request["birth_longitude"] = (
+                        location["longitude"]
+                    )
+
                     birth_request["step"] = "confirmation"
 
                     birth_date_text = birth_request[
@@ -2780,54 +2904,56 @@ elif step == "birth_place":
                         choice_lines
                     )
 
-                    bot.send_message(
-                        message.chat.id,
-                        (
+                    if language == "fr":
+                        location_message = (
                             "⚠️ Plusieurs lieux correspondent à ce nom.\n\n"
                             f"{choices_text}\n\n"
                             "Précise davantage ton lieu de naissance, "
-        elif step == "birth_time":
-            try:
-                parsed_time = datetime.strptime(
-                    message.text.strip(),
-                    "%H:%M"
-                ).time()
+                            "par exemple : Paris, France."
+                        )
+                    else:
+                        location_message = (
+                            "⚠️ Several locations match that name.\n\n"
+                            f"{choices_text}\n\n"
+                            "Please make your birth place more precise, "
+                            "for example: Paris, France."
+                        )
 
-                birth_request["birth_time"] = parsed_time
-                birth_request["step"] = "birth_place"
-
-                bot.send_message(
-                    message.chat.id,
-                    get_text(
-                        language,
-                        "birth_place_question"
+                    bot.send_message(
+                        message.chat.id,
+                        location_message
                     )
-                )
 
-            except ValueError:
-                bot.send_message(
-                    message.chat.id,
-                    get_text(
-                        language,
-                        "birth_time_invalid"
+                elif location_result["status"] == "not_found":
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "❌ Je n'ai pas trouvé ce lieu.\n\n"
+                            "Essaie avec la ville et le pays, "
+                            "par exemple : Paris, France."
+                        )
+                        if language == "fr"
+                        else (
+                            "❌ I couldn't find that location.\n\n"
+                            "Try entering the city and country, "
+                            "for example: Paris, France."
+                        )
                     )
-                )
 
-        elif step == "birth_place":
-            birth_place = message.text.strip()
-
-            if len(birth_place) < 2:
-                bot.send_message(
-                    message.chat.id,
-                    get_text(
-                        language,
-                        "birth_place_invalid"
+                else:
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "❌ La recherche du lieu est temporairement "
+                            "indisponible. Réessaie dans quelques instants."
+                        )
+                        if language == "fr"
+                        else (
+                            "❌ Location search is temporarily unavailable. "
+                            "Please try again in a moment."
+                        )
                     )
-                )
 
-            else:
-                location_result = resolve_birth_location(
-                    birth_place
                 )
 
                 if location_result["status"] == "resolved":
