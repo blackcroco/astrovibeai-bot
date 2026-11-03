@@ -16,6 +16,7 @@ from compatibility_engine_en import generate_compatibility_en
 from weekly_engine import generate_weekly_horoscope
 from premium_engine import generate_premium_feature
 from personal_profile_engine import generate_personal_profile
+from birth_location_engine import resolve_birth_location, format_location_label
 
 from translations import get_text
 
@@ -1200,6 +1201,136 @@ def profile_test(message):
     send_personal_profile(
         message.chat.id,
         user_id
+    )
+# ============================================
+# TEST TEMPORAIRE DE LOCALISATION
+# ============================================
+
+@bot.message_handler(commands=["location_test"])
+def location_test(message):
+    create_or_update_user(message)
+
+    user_id = message.from_user.id
+    language = get_user_language(user_id)
+
+    parts = message.text.split(
+        maxsplit=1
+    )
+
+    if len(parts) < 2:
+        bot.send_message(
+            message.chat.id,
+            (
+                "📍 Utilisation : /location_test Paris"
+                if language == "fr"
+                else "📍 Usage: /location_test Paris"
+            )
+        )
+        return
+
+    city_query = parts[1].strip()
+
+    bot.send_message(
+        message.chat.id,
+        (
+            f"🔎 Recherche du lieu : {city_query}..."
+            if language == "fr"
+            else f"🔎 Searching for location: {city_query}..."
+        )
+    )
+
+    result = resolve_birth_location(
+        city_query
+    )
+
+    status = result.get(
+        "status"
+    )
+
+    if status == "resolved":
+        location = result[
+            "location"
+        ]
+
+        bot.send_message(
+            message.chat.id,
+            (
+                "✅ Lieu trouvé\n\n"
+                f"📍 {format_location_label(location, language)}\n"
+                f"🌐 Latitude : {location['latitude']}\n"
+                f"🌐 Longitude : {location['longitude']}\n"
+                f"🕐 Fuseau : {location['timezone']}"
+            )
+            if language == "fr"
+            else (
+                "✅ Location found\n\n"
+                f"📍 {format_location_label(location, language)}\n"
+                f"🌐 Latitude: {location['latitude']}\n"
+                f"🌐 Longitude: {location['longitude']}\n"
+                f"🕐 Time zone: {location['timezone']}"
+            )
+        )
+        return
+
+    if status == "ambiguous":
+        choices = result.get(
+            "choices",
+            []
+        )
+
+        lines = []
+
+        for index, location in enumerate(
+            choices,
+            start=1
+        ):
+            lines.append(
+                f"{index}. "
+                f"{format_location_label(location, language)}"
+            )
+
+        choices_text = "\n".join(
+            lines
+        )
+
+        bot.send_message(
+            message.chat.id,
+            (
+                "⚠️ Plusieurs lieux correspondent à ta recherche.\n\n"
+                f"{choices_text}\n\n"
+                "Aucun lieu n'a été sélectionné automatiquement."
+            )
+            if language == "fr"
+            else (
+                "⚠️ Several locations match your search.\n\n"
+                f"{choices_text}\n\n"
+                "No location was selected automatically."
+            )
+        )
+        return
+
+    if status == "not_found":
+        bot.send_message(
+            message.chat.id,
+            (
+                "❌ Aucun lieu correspondant n'a été trouvé."
+                if language == "fr"
+                else "❌ No matching location was found."
+            )
+        )
+        return
+
+    bot.send_message(
+        message.chat.id,
+        (
+            "❌ La recherche du lieu est temporairement indisponible.\n\n"
+            f"Diagnostic : {status}"
+        )
+        if language == "fr"
+        else (
+            "❌ Location search is temporarily unavailable.\n\n"
+            f"Diagnostic: {status}"
+        )
     )
 
 # ============================================
