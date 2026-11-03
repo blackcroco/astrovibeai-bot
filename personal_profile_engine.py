@@ -1346,3 +1346,1011 @@ def generate_personal_profile(
     )
 
     return "\n\n".join(sections)
+# ============================================
+# ENGLISH PERSONAL PROFILE CONTENT
+# BLOCK 1/3: ARIES TO CANCER
+# ============================================
+
+
+SIGN_PROFILES_EN = {
+    "aries": {
+        "identity": (
+            "Your Aries energy is driven by momentum, initiative, and "
+            "the need to move forward. You develop through challenge, "
+            "courage, and the willingness to explore paths that others "
+            "may not yet be ready to follow."
+        ),
+        "personality": (
+            "You have a direct, determined, and spontaneous personality. "
+            "When something inspires you, you naturally prefer action "
+            "over extended observation or hesitation."
+        ),
+        "emotional_world": (
+            "Your emotions can arise quickly and intensely, but they are "
+            "not always meant to remain for long. You regain balance when "
+            "you can express what you feel honestly and then restore movement."
+        ),
+        "communication": (
+            "You communicate with honesty and efficiency. Your words have "
+            "the greatest impact when your natural directness is balanced "
+            "with listening, because your pace can sometimes move faster "
+            "than that of the people around you."
+        ),
+        "love": (
+            "In love, you look for energy, presence, and a relationship "
+            "that continues to inspire you. You appreciate spontaneous "
+            "gestures, lively attraction, and the feeling that both people "
+            "are moving forward together."
+        ),
+        "relationship_needs": (
+            "You need a bond that respects your independence without creating "
+            "emotional distance. A healthy relationship for you combines "
+            "honesty, desire, personal freedom, and the ability to resolve "
+            "tension without indirect games."
+        ),
+        "motivation": (
+            "You are motivated by new beginnings, visible challenges, and "
+            "situations that allow you to test your courage. Your energy "
+            "increases when the goal is clear, concrete, and stimulating."
+        ),
+        "work": (
+            "At work, you can thrive in environments that value initiative, "
+            "responsiveness, and decisive action. You naturally bring the "
+            "momentum that transforms an idea into something real."
+        ),
+        "ambition": (
+            "Your ambition is fuelled by progress and the desire to overcome "
+            "obstacles. It becomes more sustainable when supported by strategy "
+            "rather than relying only on initial enthusiasm."
+        ),
+        "finances": (
+            "Your financial choices can be instinctive and action-oriented. "
+            "You may invest quickly in what excites you, so a simple pause "
+            "before major spending can strengthen your long-term security."
+        ),
+        "strengths": (
+            "Courage, spontaneity, initiative, honesty, and the ability to "
+            "recover quickly are among your strongest qualities. You know "
+            "how to restore movement when a situation has become stuck."
+        ),
+        "watchpoints": (
+            "Impatience, haste, and difficulty accepting slower rhythms can "
+            "sometimes scatter your energy. Not everything needs to be won "
+            "immediately in order to hold lasting value."
+        ),
+        "balance": (
+            "Your balance depends on alternating periods of intense action "
+            "with genuine recovery. Physical movement, short-term objectives, "
+            "and spaces where you can make your own decisions help you reset."
+        ),
+        "growth": (
+            "Your greatest potential emerges when you transform impulse into "
+            "perseverance. Learning to listen without losing your courage "
+            "allows you to become both a powerful and dependable driving force."
+        ),
+    },
+
+    "taurus": {
+        "identity": (
+            "Your Taurus energy is centred on stability, tangible values, "
+            "and the need to build something that can endure. You develop "
+            "through patience, consistency, and a strong relationship with "
+            "what feels reliable and meaningful."
+        ),
+        "personality": (
+            "You usually move through life with calmness, realism, and steady "
+            "determination. You prefer to understand what can be trusted before "
+            "committing, but once you decide, your endurance can be remarkable."
+        ),
+        "emotional_world": (
+            "Your emotional world seeks safety, continuity, and tangible signs "
+            "of care. Consistent presence and dependable actions may mean more "
+            "to you than dramatic declarations that quickly disappear."
+        ),
+        "communication": (
+            "You communicate in a thoughtful and grounded way. You value "
+            "consistency between words and actions, and you may need time "
+            "before accepting an idea that disrupts your established perspective."
+        ),
+        "love": (
+            "In love, you seek loyalty, sensuality, and trust that develops "
+            "gradually. You enjoy creating a reassuring bond in which affection "
+            "is expressed through everyday attention and dependable presence."
+        ),
+        "relationship_needs": (
+            "You need stability without emotional stagnation, closeness without "
+            "pressure, and a partner whose intentions are clear. Gentleness, "
+            "loyalty, and patience deeply support your ability to trust."
+        ),
+        "motivation": (
+            "You are motivated by durable results, earned comfort, and the "
+            "opportunity to see the concrete rewards of your sustained effort."
+        ),
+        "work": (
+            "At work, your patience, practicality, and reliability make you "
+            "a stabilising presence. You are particularly effective when a "
+            "project requires consistency, precision, and careful resource management."
+        ),
+        "ambition": (
+            "Your ambition may be quiet, but it can be exceptionally solid. "
+            "You generally prefer steady, controlled progress to rapid success "
+            "that lacks reliable foundations."
+        ),
+        "finances": (
+            "You naturally value financial security and genuine quality. "
+            "You can manage resources effectively over time, provided that "
+            "the desire for comfort does not become excessive resistance to change."
+        ),
+        "strengths": (
+            "Perseverance, loyalty, patience, realism, and the ability to create "
+            "stability are among your greatest strengths. You know how to give "
+            "a concrete form to what began only as an intention."
+        ),
+        "watchpoints": (
+            "Attachment to familiar habits may occasionally keep you in a "
+            "situation that no longer suits you. Your determination becomes "
+            "more valuable when it remains capable of evolving."
+        ),
+        "balance": (
+            "Your balance is supported by steady rhythms, simple pleasures, "
+            "a peaceful environment, and a healthy connection with your body."
+        ),
+        "growth": (
+            "Your potential expands when you recognise that change does not "
+            "necessarily threaten stability. You can evolve while preserving "
+            "the values that genuinely matter to you."
+        ),
+    },
+
+    "gemini": {
+        "identity": (
+            "Your Gemini energy is based on curiosity, communication, and "
+            "the need to connect ideas. You develop through discovery, "
+            "questioning, and sharing what you learn with others."
+        ),
+        "personality": (
+            "You have a quick, adaptable, and mentally active personality. "
+            "Variety stimulates your intelligence and helps you avoid feeling "
+            "restricted by a single perspective or routine."
+        ),
+        "emotional_world": (
+            "You may try to understand your emotions by naming, explaining, "
+            "or discussing them. Conversation helps you create perspective, "
+            "although some feelings need to be experienced before being analysed."
+        ),
+        "communication": (
+            "Communication is one of your strongest resources. You can adjust "
+            "your language, absorb information quickly, and build connections "
+            "between people, subjects, or perspectives."
+        ),
+        "love": (
+            "In love, you seek mental connection, humour, and a relationship "
+            "that remains lively. A stimulating conversation can be as important "
+            "to you as a traditional romantic gesture."
+        ),
+        "relationship_needs": (
+            "You need freedom of expression, variety, and a bond that does not "
+            "confuse commitment with confinement. Curiosity and honest dialogue "
+            "help your relationships remain emotionally alive."
+        ),
+        "motivation": (
+            "You are motivated by fresh ideas, interesting encounters, and "
+            "the opportunity to learn quickly. Your energy rises when several "
+            "new perspectives become available."
+        ),
+        "work": (
+            "You can excel in communication, writing, teaching, sales, or roles "
+            "that require flexibility and the rapid movement of information."
+        ),
+        "ambition": (
+            "Your ambition may follow several directions at once. It becomes "
+            "more powerful when you select a few meaningful priorities and "
+            "transform your versatility into recognised expertise."
+        ),
+        "finances": (
+            "Your financial habits may vary according to your changing interests. "
+            "Simple and automated organisation can protect your freedom while "
+            "keeping long-term goals visible."
+        ),
+        "strengths": (
+            "Curiosity, adaptability, social intelligence, humour, and rapid "
+            "learning are among your most important natural strengths."
+        ),
+        "watchpoints": (
+            "Distraction, inconsistency, or remaining at the surface of too many "
+            "subjects can dilute your potential. Depth does not require you "
+            "to abandon your natural diversity."
+        ),
+        "balance": (
+            "Your balance requires both stimulating interaction and periods "
+            "without mental noise. Writing, walking, or reducing external input "
+            "can help you rediscover your own inner direction."
+        ),
+        "growth": (
+            "Your development depends on combining curiosity with consistency. "
+            "When you explore what genuinely matters to you in greater depth, "
+            "your words gain influence, clarity, and credibility."
+        ),
+    },
+
+    "cancer": {
+        "identity": (
+            "Your Cancer energy is organised around sensitivity, protection, "
+            "and the need to belong. You develop by creating relationships "
+            "and environments where emotional trust can gradually grow."
+        ),
+        "personality": (
+            "You naturally notice atmospheres and unspoken needs. Behind an "
+            "apparently reserved exterior, there can be great loyalty, imagination, "
+            "and considerable emotional strength."
+        ),
+        "emotional_world": (
+            "Your inner world is rich and closely linked to memory. Experiences "
+            "that touch you can remain emotionally present for a long time, "
+            "even when you do not speak about them immediately."
+        ),
+        "communication": (
+            "You communicate most openly when the emotional climate feels safe. "
+            "Your intuition helps you understand what has not been said, but "
+            "expressing your needs directly prevents others from having to guess."
+        ),
+        "love": (
+            "In love, you seek a sincere, protective, and intimate bond. "
+            "You give deeply when you feel secure and appreciate relationships "
+            "that can become a genuine emotional home."
+        ),
+        "relationship_needs": (
+            "You need emotional safety, continuity, and sensitivity. A healthy "
+            "relationship values your caring nature without trapping you in "
+            "a role where you must carry everyone else's emotional needs."
+        ),
+        "motivation": (
+            "You are motivated by the desire to protect, transmit, support, "
+            "and give human meaning to what you create."
+        ),
+        "work": (
+            "Your understanding of needs, intuition, and perseverance can be "
+            "valuable in care, creative work, hospitality, community management, "
+            "or any role that requires emotional awareness."
+        ),
+        "ambition": (
+            "Your ambition becomes stronger when connected to a cause or a sense "
+            "of usefulness. You can move with determination when your objective "
+            "has genuine personal and emotional meaning."
+        ),
+        "finances": (
+            "Financial security can represent a form of emotional protection. "
+            "You may favour saving and careful decisions, while remaining mindful "
+            "not to let anxiety make every financial choice."
+        ),
+        "strengths": (
+            "Intuition, empathy, loyalty, imagination, and the ability to protect "
+            "others are among your most important natural strengths."
+        ),
+        "watchpoints": (
+            "Sensitivity, withdrawal, or attachment to the past may sometimes "
+            "hold you back. An emotion deserves to be heard without necessarily "
+            "becoming a permanent definition of the present."
+        ),
+        "balance": (
+            "Your balance depends on a reassuring private space, dependable "
+            "relationships, and enough time to welcome your emotions instead "
+            "of being overwhelmed by them."
+        ),
+        "growth": (
+            "Your potential is fully expressed when sensitivity becomes a guide "
+            "rather than a defence. Clear boundaries allow you to keep caring "
+            "for others without abandoning your own emotional needs."
+        ),
+    },
+}
+# ============================================
+# ENGLISH PERSONAL PROFILE CONTENT
+# BLOCK 2/3: LEO TO SCORPIO
+# ============================================
+
+
+SIGN_PROFILES_EN.update({
+    "leo": {
+        "identity": (
+            "Your Leo energy is centred on creativity, presence, and "
+            "the need to express something uniquely your own. You thrive "
+            "when you can bring genuine heart and personal meaning into "
+            "what you create."
+        ),
+        "personality": (
+            "You have an expressive, warm, and generous personality. "
+            "Your enthusiasm can naturally bring people together, and you "
+            "often have the ability to make projects feel more alive, "
+            "confident, and meaningful."
+        ),
+        "emotional_world": (
+            "Your emotional world is closely connected to the need for "
+            "sincere recognition. You may appear strong and self-assured "
+            "while remaining sensitive to indifference or a lack of appreciation."
+        ),
+        "communication": (
+            "You communicate with presence and conviction. Your influence "
+            "becomes even stronger when your confidence serves the message "
+            "itself rather than the need to maintain a particular image."
+        ),
+        "love": (
+            "In love, you seek warmth, loyalty, mutual admiration, and open "
+            "affection. You want to feel that the relationship matters deeply "
+            "and that both people are proud to give it a meaningful place "
+            "in their lives."
+        ),
+        "relationship_needs": (
+            "You need visible affection, loyalty, and a partner who can "
+            "appreciate your light without losing their own. Mutual recognition "
+            "and generosity help you feel secure in love."
+        ),
+        "motivation": (
+            "You are motivated by creativity, recognition, and the opportunity "
+            "to inspire others. You give your best when your involvement can "
+            "leave a personal and meaningful mark."
+        ),
+        "work": (
+            "You can thrive in roles involving leadership, creativity, "
+            "representation, performance, or the ability to motivate and "
+            "bring people together around a shared direction."
+        ),
+        "ambition": (
+            "Your ambition often aims toward an achievement you can genuinely "
+            "feel proud of. It becomes sustainable when outside recognition "
+            "reflects something that is also deeply meaningful to you."
+        ),
+        "finances": (
+            "You may see money as a way to enjoy life, create, and share. "
+            "Maintaining a financial safety margin helps ensure that generosity "
+            "or a taste for quality does not exceed your available resources."
+        ),
+        "strengths": (
+            "Creativity, courage, loyalty, generosity, and the ability to inspire "
+            "others are among your strongest natural qualities."
+        ),
+        "watchpoints": (
+            "Pride can sometimes make vulnerability difficult to acknowledge. "
+            "You lose none of your dignity by accepting that you cannot control "
+            "everything or always remain at the centre of attention."
+        ),
+        "balance": (
+            "Your balance depends on creative expression, sincere relationships, "
+            "and environments where you can shine without constantly having "
+            "to prove your worth."
+        ),
+        "growth": (
+            "Your potential expands when the desire to be recognised becomes "
+            "an ability to recognise others as well. Your leadership then gains "
+            "greater depth, generosity, and lasting trust."
+        ),
+    },
+
+    "virgo": {
+        "identity": (
+            "Your Virgo energy is centred on observation, refinement, and "
+            "the desire to make things more useful, precise, and effective. "
+            "You develop by improving what already exists."
+        ),
+        "personality": (
+            "You have an analytical, conscientious, and detail-oriented "
+            "personality. You feel most effective when your knowledge and "
+            "abilities produce practical, reliable results."
+        ),
+        "emotional_world": (
+            "You may try to organise what you feel before expressing it. "
+            "This restraint can protect your privacy, but it can also turn "
+            "a simple emotional experience into prolonged analysis."
+        ),
+        "communication": (
+            "You communicate with precision and discernment. You notice "
+            "inconsistencies and opportunities for improvement quickly, "
+            "while benefiting from distinguishing useful feedback from "
+            "unnecessary perfectionism."
+        ),
+        "love": (
+            "In love, you often demonstrate affection through attentiveness, "
+            "reliability, and practical gestures that genuinely improve the "
+            "other person's daily life."
+        ),
+        "relationship_needs": (
+            "You need a relationship that feels clear, respectful, and "
+            "consistent. Trust grows when words are supported by actions "
+            "and both people take responsibility for the health of the bond."
+        ),
+        "motivation": (
+            "You are motivated by usefulness, mastery, and the feeling that "
+            "something is becoming better because of your involvement. "
+            "Solving a problem can strongly stimulate your energy."
+        ),
+        "work": (
+            "Your methodical nature, attention to detail, and analytical "
+            "abilities are valuable in roles involving organisation, expertise, "
+            "service, research, or quality control."
+        ),
+        "ambition": (
+            "Your ambition often focuses more on competence than status. "
+            "You want your work to demonstrate genuine quality, although "
+            "you may need to recognise your progress before everything "
+            "feels completely perfect."
+        ),
+        "finances": (
+            "You can approach money with care and organisation. Tracking tools "
+            "and clear plans can suit you well, provided that the desire for "
+            "control does not turn every financial decision into a source of worry."
+        ),
+        "strengths": (
+            "Precision, reliability, practical intelligence, discernment, "
+            "and a genuine desire to improve things are among your most "
+            "important natural strengths."
+        ),
+        "watchpoints": (
+            "Perfectionism, self-criticism, and excessive analysis can make "
+            "you overlook the value of what is already working well."
+        ),
+        "balance": (
+            "Your balance is supported by flexible routines, a clear environment, "
+            "and the ability to feel useful without assuming responsibility "
+            "for everything around you."
+        ),
+        "growth": (
+            "Your potential unfolds when you replace the demand for perfection "
+            "with a living form of excellence. Accepting imperfection can make "
+            "you freer without reducing the quality of what you produce."
+        ),
+    },
+
+    "libra": {
+        "identity": (
+            "Your Libra energy is organised around harmony, relationships, "
+            "and the search for fair balance. You develop through exchange "
+            "with others and by finding solutions that can bring different "
+            "perspectives together."
+        ),
+        "personality": (
+            "You have a sociable, diplomatic, and nuanced personality. "
+            "You naturally understand several points of view and generally "
+            "prefer to create common ground rather than unnecessary opposition."
+        ),
+        "emotional_world": (
+            "Your emotional balance is strongly influenced by the quality "
+            "of your relationships and surroundings. Unresolved conflict "
+            "can affect you even when you maintain a calm and composed exterior."
+        ),
+        "communication": (
+            "You communicate with tact, elegance, and a strong sense of proportion. "
+            "Your words become more powerful when you clearly express your "
+            "own position instead of endlessly searching for the perfect formulation."
+        ),
+        "love": (
+            "In love, you seek connection, respect, and a partnership in which "
+            "both people genuinely consider each other. Thoughtful gestures, "
+            "dialogue, and the feeling of being a team matter deeply to you."
+        ),
+        "relationship_needs": (
+            "You need balanced communication, affection, and a partner who "
+            "can make decisions with you. A healthy relationship allows you "
+            "to preserve harmony without sacrificing your personal needs."
+        ),
+        "motivation": (
+            "You are motivated by beauty, cooperation, and projects that can "
+            "improve an environment or relationship. You invest deeply when "
+            "you believe in the human quality of what you are building."
+        ),
+        "work": (
+            "At work, your diplomacy, presentation skills, and ability to "
+            "negotiate can be valuable. You may thrive where coordination, "
+            "advice, representation, or relationship management is important."
+        ),
+        "ambition": (
+            "Your ambition often seeks to combine personal achievement with "
+            "social recognition. It becomes stronger when you choose a direction "
+            "without waiting for unanimous approval."
+        ),
+        "finances": (
+            "You may be attracted to quality, aesthetics, and the pleasure "
+            "of sharing. A simple financial framework can help you enjoy these "
+            "values without allowing social or spontaneous spending to interfere "
+            "with your longer-term objectives."
+        ),
+        "strengths": (
+            "Diplomacy, charm, fairness, relational intelligence, and the "
+            "ability to bring different perspectives together are among "
+            "your most valuable strengths."
+        ),
+        "watchpoints": (
+            "Indecision, avoiding necessary conflict, or giving too much weight "
+            "to external approval can sometimes separate you from what you "
+            "genuinely want."
+        ),
+        "balance": (
+            "Your balance depends on reciprocal relationships, harmonious "
+            "surroundings, and moments when you can reconnect with your own "
+            "opinion without being influenced by everyone else's expectations."
+        ),
+        "growth": (
+            "Your potential expands when your search for harmony includes "
+            "your own truth. Saying no, choosing clearly, and expressing a "
+            "preference can become powerful acts of balance."
+        ),
+    },
+
+    "scorpio": {
+        "identity": (
+            "Your Scorpio energy is centred on depth, intensity, and "
+            "transformation. Surface appearances rarely satisfy you for long; "
+            "you instinctively want to understand what is happening underneath."
+        ),
+        "personality": (
+            "You have a determined, intuitive, and often magnetic personality. "
+            "You observe carefully before granting trust, but once you commit "
+            "sincerely, your involvement can be exceptionally strong."
+        ),
+        "emotional_world": (
+            "Your emotional world is deep and complex. You can feel intensely "
+            "without immediately revealing what is happening inside. Trust "
+            "is essential before you comfortably expose your vulnerability."
+        ),
+        "communication": (
+            "You communicate with intensity and discernment. You are often "
+            "sensitive to contradictions and unspoken dynamics, although "
+            "your intuition becomes more reliable when it remains open to "
+            "verification and honest dialogue."
+        ),
+        "love": (
+            "In love, you seek an authentic, loyal, and transformative connection. "
+            "Superficial bonds rarely satisfy you; you want to know the other "
+            "person deeply and to be known with the same honesty."
+        ),
+        "relationship_needs": (
+            "You need trust, emotional truth, and a strong sense of loyalty. "
+            "A healthy relationship respects your intensity while preserving "
+            "the autonomy and personal space of both people."
+        ),
+        "motivation": (
+            "You are motivated by profound challenges, complex situations, "
+            "and the possibility of transforming weakness, difficulty, or "
+            "uncertainty into greater strength."
+        ),
+        "work": (
+            "At work, you may thrive in research, analysis, strategy, psychology, "
+            "investigation, or environments that require confidentiality, "
+            "resilience, and an understanding of hidden dynamics."
+        ),
+        "ambition": (
+            "Your ambition may remain private, but it can be exceptionally "
+            "determined. Once you choose an objective, you can mobilise "
+            "considerable inner resources to move through obstacles."
+        ),
+        "finances": (
+            "You may approach money strategically and pay attention to the "
+            "power dynamics surrounding resources. Transparency and clear "
+            "agreements are particularly important when finances are shared."
+        ),
+        "strengths": (
+            "Insight, emotional courage, determination, intuition, and the "
+            "capacity for transformation are among your greatest strengths."
+        ),
+        "watchpoints": (
+            "Mistrust, excessive control, or difficulty releasing past hurt "
+            "can prolong tension that might be better expressed, understood, "
+            "and eventually transformed."
+        ),
+        "balance": (
+            "Your balance depends on trustworthy relationships, private spaces, "
+            "and activities that channel your intensity into creation, "
+            "understanding, or constructive action."
+        ),
+        "growth": (
+            "Your potential expands when you discover that trust is not a loss "
+            "of power. Gradually sharing vulnerability can deepen your bonds "
+            "without diminishing your strength."
+        ),
+    },
+})
+# ============================================
+# ENGLISH PERSONAL PROFILE CONTENT
+# BLOCK 3/3: SAGITTARIUS TO PISCES
+# + ENGLISH PROFILE GENERATION
+# ============================================
+
+
+SIGN_PROFILES_EN.update({
+    "sagittarius": {
+        "identity": (
+            "Your Sagittarius energy is driven by exploration, meaning, "
+            "and the desire to expand your horizons. You develop through "
+            "discovery, experience, and the freedom to move beyond familiar "
+            "ideas and environments."
+        ),
+        "personality": (
+            "You have an enthusiastic, independent, and possibility-oriented "
+            "personality. Your optimism helps you recover from setbacks and "
+            "restore movement when circumstances begin to feel restrictive."
+        ),
+        "emotional_world": (
+            "You may find it difficult to remain confined within a heavy "
+            "emotional state. You naturally search for hope, perspective, "
+            "or a larger meaning, although some experiences need time before "
+            "their deeper purpose becomes clear."
+        ),
+        "communication": (
+            "You communicate with honesty, humour, and conviction. You can "
+            "inspire others through your vision, while your words become more "
+            "effective when spontaneity remains attentive to emotional impact."
+        ),
+        "love": (
+            "In love, you seek honesty, adventure, and a relationship that "
+            "continues to grow. You appreciate a partner who can share new "
+            "experiences while respecting your need for personal space."
+        ),
+        "relationship_needs": (
+            "You need trust, freedom, and a sense of shared direction. "
+            "A healthy relationship gives both people room to evolve without "
+            "turning commitment into control or excessive obligation."
+        ),
+        "motivation": (
+            "You are motivated by travel, learning, large ideas, and challenges "
+            "that create a sense of expansion. You need to feel that your "
+            "efforts are leading toward something meaningful."
+        ),
+        "work": (
+            "You can thrive in teaching, communication, consulting, travel, "
+            "international environments, or roles that require vision and "
+            "the ability to inspire others."
+        ),
+        "ambition": (
+            "Your ambition often reaches toward a broad and meaningful goal. "
+            "It becomes more sustainable when your vision is supported by "
+            "concrete stages, realistic priorities, and regular discipline."
+        ),
+        "finances": (
+            "You may view money as a means of exploration and experience. "
+            "A structured financial reserve helps you protect this freedom "
+            "without depending entirely on favourable circumstances."
+        ),
+        "strengths": (
+            "Optimism, honesty, generosity, vision, and the ability to inspire "
+            "enthusiasm are among your strongest natural qualities."
+        ),
+        "watchpoints": (
+            "Impatience, overconfidence, or promising more than you can "
+            "realistically deliver may weaken otherwise valuable projects."
+        ),
+        "balance": (
+            "Your balance requires space, movement, and a direction that feeds "
+            "your need for meaning, together with a few stable foundations "
+            "that give you somewhere reliable to return."
+        ),
+        "growth": (
+            "Your potential unfolds when you connect vision with method. "
+            "Freedom then becomes the ability to choose consciously rather "
+            "than a permanent need to escape limitation."
+        ),
+    },
+
+    "capricorn": {
+        "identity": (
+            "Your Capricorn energy is centred on responsibility, mastery, "
+            "and long-term construction. You develop through experience, "
+            "discipline, and the gradual creation of genuine competence."
+        ),
+        "personality": (
+            "You have a serious, persistent, and pragmatic personality. "
+            "You recognise constraints realistically and can continue working "
+            "toward a goal long after others have lost patience."
+        ),
+        "emotional_world": (
+            "You may keep emotions under control in order to remain effective "
+            "and dependable. Beneath this composure, there is often a deep need "
+            "for security, respect, and sincere recognition."
+        ),
+        "communication": (
+            "You communicate with structure, restraint, and responsibility. "
+            "You generally prefer useful words to dramatic statements and place "
+            "considerable value on consistency and reliability."
+        ),
+        "love": (
+            "In love, you seek a stable, loyal, and seriously constructed bond. "
+            "You may express affection through commitment, practical presence, "
+            "and a willingness to protect the future of the relationship."
+        ),
+        "relationship_needs": (
+            "You need a mature, dependable relationship that respects your "
+            "goals. Trust grows when both people take responsibility for their "
+            "choices and honour the commitments they make."
+        ),
+        "motivation": (
+            "You are motivated by progress, mastery, and the opportunity to "
+            "build something whose value will be recognised over time."
+        ),
+        "work": (
+            "At work, your organisation, patience, and strategic thinking can "
+            "lead you toward significant responsibility. You know how to turn "
+            "an ambitious objective into a realistic plan."
+        ),
+        "ambition": (
+            "Ambition is often central to your development. You are less "
+            "interested in temporary attention than in a solid achievement "
+            "earned through experience, discipline, and consistency."
+        ),
+        "finances": (
+            "You can approach money with caution and long-term vision. "
+            "Material security represents a form of independence, although "
+            "it should not become the only measure of your success."
+        ),
+        "strengths": (
+            "Discipline, perseverance, integrity, realism, and strategic "
+            "thinking are among your most important natural strengths."
+        ),
+        "watchpoints": (
+            "High expectations, pessimism, or carrying too much responsibility "
+            "alone can disconnect you from your more spontaneous emotional needs."
+        ),
+        "balance": (
+            "Your balance depends on structured objectives, but also on periods "
+            "when your value is not measured by productivity, achievement, "
+            "or the ability to remain completely in control."
+        ),
+        "growth": (
+            "Your potential expands when you allow more flexibility, trust, "
+            "and enjoyment into your journey. Strength and sensitivity do not "
+            "need to exist in opposition."
+        ),
+    },
+
+    "aquarius": {
+        "identity": (
+            "Your Aquarius energy is driven by independence, originality, "
+            "and the ability to imagine different ways of living and working. "
+            "You develop by questioning structures that no longer make sense."
+        ),
+        "personality": (
+            "You have an inventive, autonomous, and future-oriented personality. "
+            "You appreciate fresh ideas and people who can respect difference "
+            "without trying to force everyone into the same pattern."
+        ),
+        "emotional_world": (
+            "You may create distance in order to understand what you feel. "
+            "This gives you perspective, but emotions cannot always be resolved "
+            "as purely intellectual questions."
+        ),
+        "communication": (
+            "You communicate with originality, logic, and freedom. You can "
+            "challenge assumptions and introduce perspectives that other people "
+            "may not previously have considered."
+        ),
+        "love": (
+            "In love, you seek friendship, freedom, and intellectual connection. "
+            "You need to feel loved without being confined to a fixed identity "
+            "or a role that prevents personal evolution."
+        ),
+        "relationship_needs": (
+            "You need personal space, trust, and a partner who understands that "
+            "independence does not necessarily mean emotional detachment."
+        ),
+        "motivation": (
+            "You are motivated by innovation, collective projects, and ideas "
+            "that can make a system more intelligent, fair, or liberating."
+        ),
+        "work": (
+            "You can thrive in technology, research, communication, social "
+            "projects, or environments that value innovation and independent thought."
+        ),
+        "ambition": (
+            "Your ambition often involves changing the rules rather than simply "
+            "succeeding within them. You want to contribute something original "
+            "while protecting your intellectual freedom."
+        ),
+        "finances": (
+            "Your relationship with money may be less conventional than average. "
+            "You may prioritise autonomy and innovative projects, while still "
+            "benefiting from a stable financial foundation."
+        ),
+        "strengths": (
+            "Originality, independence, open-mindedness, collective vision, "
+            "and the ability to innovate are among your strongest qualities."
+        ),
+        "watchpoints": (
+            "Emotional detachment": (
+            "Your balance requires authentic freedom, stimulating exchange, "
+            "and a community in which your originality does not need constant defence."
+        ),
+        "growth": (
+            "Your potential expands when collective ideals remain connected "
+            "to the emotional reality of individual people. Personal involvement "
+            "can give your ideas greater influence and human depth."
+        ),
+    },
+
+    "pisces": {
+        "identity": (
+            "Your Pisces energy is centred on sensitivity, imagination, and "
+            "the ability to perceive what exists beyond ordinary frameworks. "
+            "You develop by giving a personal and practical form to your intuition."
+        ),
+        "personality": (
+            "You have a receptive, empathetic, and creative personality. "
+            "You can understand several realities at once and often notice "
+            "an atmosphere before anyone has expressed it directly."
+        ),
+        "emotional_world": (
+            "Your emotional world is broad, subtle, and sometimes difficult "
+            "to separate from your surroundings. Solitude can help you distinguish "
+            "your own feelings from those you have absorbed from others."
+        ),
+        "communication": (
+            "You often communicate through intuition, images, and emotional tone. "
+            "Your message becomes clearer when you translate impressions into "
+            "specific needs, observations, and concrete language."
+        ),
+        "love": (
+            "In love, you seek a deep, gentle, and inspiring connection. "
+            "You can give generously and idealise the bond, which makes healthy "
+            "boundaries and genuine reciprocity especially important."
+        ),
+        "relationship_needs": (
+            "You need sensitivity, empathy, and a space where your emotional "
+            "depth is respected rather than exploited. A balanced relationship "
+            "supports your dreams while remaining grounded in consistent action."
+        ),
+        "motivation": (
+            "You are motivated by inspiration, creativity, and the feeling "
+            "that your contribution serves something larger than purely "
+            "material interests."
+        ),
+        "work": (
+            "You can thrive in creative work, care, imagination, support roles, "
+            "or projects that require intuition and a deep understanding of people."
+        ),
+        "ambition": (
+            "Your ambition is often connected to meaning and inspiration. "
+            "It becomes more achievable when intuitive ideas are translated "
+            "into clear stages and regular commitments."
+        ),
+        "finances": (
+            "Your financial choices may be influenced by emotion or generosity. "
+            "A few concrete and automated rules can protect your resources "
+            "without suppressing your desire to share."
+        ),
+        "strengths": (
+            "Empathy, intuition, imagination, compassion, and creative sensitivity "
+            "are among your most important natural strengths."
+        ),
+        "watchpoints": (
+            "Idealisation, avoidance, or difficulty establishing boundaries "
+            "can expose you to disappointment and emotional exhaustion."
+        ),
+        "balance": (
+            "Your balance depends on creativity, rest, healthy boundaries, "
+            "and spaces where you can reconnect with your own inner rhythm."
+        ),
+        "growth": (
+            "Your potential emerges when intuition meets structure. By giving "
+            "a practical form to sensitivity, you can transform perception "
+            "into a genuine power of creation, understanding, and support."
+        ),
+    },
+})
+
+
+def build_english_summary(context, profile):
+    sign_name = context["sign_name"]
+    element_label = context["sign_meta"]["element_label"]
+    modality_label = context["sign_meta"]["modality_label"]
+
+    return (
+        f"Your {sign_name} profile combines the energy of the "
+        f"{element_label} element with a {modality_label.lower()} dynamic. "
+        f"{profile['strengths']} "
+        f"Your personal development also involves greater awareness of this "
+        f"area: {profile['watchpoints']} "
+        f"The heart of your journey is to transform your natural qualities "
+        f"into choices that are sustainable, free, and genuinely aligned."
+    )
+
+
+def generate_personal_profile(
+    sign,
+    language="fr",
+    birth_date=None,
+    birth_time=None,
+    birth_time_known=None,
+    birth_place=None,
+):
+    language = language if language in ("fr", "en") else "fr"
+
+    context = build_profile_context(
+        sign=sign,
+        language=language,
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+    )
+
+    if language == "en":
+        profiles = SIGN_PROFILES_EN
+    else:
+        profiles = SIGN_PROFILES_FR
+
+    profile = profiles.get(
+        context["sign_key"]
+    )
+
+    if not profile:
+        raise ValueError(
+            "Personal profile content is unavailable"
+        )
+
+    sections = []
+
+    birth_context_text = build_birth_context_text(
+        context
+    )
+
+    if language == "en":
+        profile_title = "✨ ASTROVIBE PERSONAL PROFILE"
+    else:
+        profile_title = "✨ PROFIL ASTROVIBE PERSONNEL"
+
+    if birth_context_text:
+        sections.append(
+            profile_title
+            + "\n\n"
+            + birth_context_text
+        )
+    else:
+        sections.append(
+            profile_title
+        )
+
+    sections.append(
+        SECTION_TITLES[language]["identity"]
+        + "\n\n"
+        + build_identity_text(context)
+        + "\n\n"
+        + profile["identity"]
+    )
+
+    ordered_sections = (
+        "personality",
+        "emotional_world",
+        "communication",
+        "love",
+        "relationship_needs",
+        "motivation",
+        "work",
+        "ambition",
+        "finances",
+        "strengths",
+        "watchpoints",
+        "balance",
+        "growth",
+    )
+
+    for section_key in ordered_sections:
+        sections.append(
+            SECTION_TITLES[language][section_key]
+            + "\n\n"
+            + profile[section_key]
+        )
+
+    if language == "en":
+        summary = build_english_summary(
+            context,
+            profile
+        )
+    else:
+        summary = build_french_summary(
+            context,
+            profile
+        )
+
+    sections.append(
+        SECTION_TITLES[language]["summary"]
+        + "\n\n"
+        + summary
+    )
+
+    return "\n\n".join(sections)
