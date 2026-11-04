@@ -2993,6 +2993,141 @@ def menu(message):
             ),
             reply_markup=language_menu()
         )
+        elif message.text in (
+            "✨ Mon Profil AstroVibe",
+            "✨ My AstroVibe Profile",
+        ):
+            if language == "en":
+                offer_text = (
+                    "✨ YOUR ASTROVIBE PERSONAL PROFILE\n\n"
+                    "Your Sun sign is only one part of your story. 🌌\n\n"
+                    "Discover a personalised astrological reading built "
+                    "from your birth information and natal chart.\n\n"
+                    "🔮 YOUR PROFILE EXPLORES:\n\n"
+                    "☀️ Sun\n"
+                    "Your identity and self-expression\n\n"
+                    "🌙 Moon\n"
+                    "Your emotional world and deeper needs\n\n"
+                    "☿ Mercury\n"
+                    "Your way of thinking and communicating\n\n"
+                    "♀ Venus\n"
+                    "Your way of loving and your values\n\n"
+                    "♂ Mars\n"
+                    "Your energy, desires and motivation\n\n"
+                    "♃ Jupiter\n"
+                    "Your potential for expansion\n\n"
+                    "♄ Saturn\n"
+                    "Your responsibilities and areas of growth\n\n"
+                    "♅ Uranus\n"
+                    "Your need for freedom and change\n\n"
+                    "♆ Neptune\n"
+                    "Your imagination and intuition\n\n"
+                    "♇ Pluto\n"
+                    "Your deeper transformations\n\n"
+                    "✨ IF YOUR EXACT BIRTH TIME IS KNOWN:\n\n"
+                    "⬆️ Your Ascendant\n"
+                    "🏠 Your astrological houses\n"
+                    "🪐 The life areas connected to your placements\n\n"
+                    "🌍 Available in French and English\n\n"
+                    "🔓 One-time purchase\n"
+                    "💎 No Premium subscription required\n\n"
+                    "⭐ LAUNCH PRICE: 390 STARS"
+                )
+
+                unlock_button = (
+                    "✨ Unlock My Profile · 390 ⭐"
+                )
+
+            else:
+                offer_text = (
+                    "✨ TON PROFIL ASTROVIBE PERSONNEL\n\n"
+                    "Ton signe solaire n’est qu’une partie "
+                    "de ton histoire. 🌌\n\n"
+                    "Découvre une lecture astrologique personnalisée "
+                    "construite à partir de tes informations de naissance "
+                    "et de ton thème natal.\n\n"
+                    "🔮 TON PROFIL EXPLORE :\n\n"
+                    "☀️ Soleil\n"
+                    "Ton identité et ta manière de t’affirmer\n\n"
+                    "🌙 Lune\n"
+                    "Ton univers émotionnel et tes besoins profonds\n\n"
+                    "☿ Mercure\n"
+                    "Ta façon de penser et de communiquer\n\n"
+                    "♀ Vénus\n"
+                    "Ta manière d’aimer et tes valeurs\n\n"
+                    "♂ Mars\n"
+                    "Ton énergie, tes désirs et ta motivation\n\n"
+                    "♃ Jupiter\n"
+                    "Ton potentiel d’expansion\n\n"
+                    "♄ Saturne\n"
+                    "Tes responsabilités et tes zones de construction\n\n"
+                    "♅ Uranus\n"
+                    "Ton besoin de liberté et de changement\n\n"
+                    "♆ Neptune\n"
+                    "Ton imagination et ton intuition\n\n"
+                    "♇ Pluton\n"
+                    "Tes transformations profondes\n\n"
+                    "✨ SI TON HEURE DE NAISSANCE EST CONNUE :\n\n"
+                    "⬆️ Ton Ascendant\n"
+                    "🏠 Tes maisons astrologiques\n"
+                    "🪐 Les domaines de vie associés à tes placements\n\n"
+                    "🌍 Disponible en français et en anglais\n\n"
+                    "🔓 Achat unique\n"
+                    "💎 Aucun abonnement Premium nécessaire\n\n"
+                    "⭐ PRIX DE LANCEMENT : 390 STARS"
+                )
+
+                unlock_button = (
+                    "✨ Débloquer mon Profil · 390 ⭐"
+                )
+
+            offer_markup = types.ReplyKeyboardMarkup(
+                resize_keyboard=True
+            )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    unlock_button
+                )
+            )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    get_text(
+                        language,
+                        "back_button"
+                    )
+                )
+            )
+
+            bot.send_message(
+                message.chat.id,
+                offer_text,
+                reply_markup=offer_markup
+            )
+
+        elif message.text in (
+            "✨ Débloquer mon Profil · 390 ⭐",
+            "✨ Unlock My Profile · 390 ⭐",
+        ):
+            if language == "en":
+                payment_preview = (
+                    "⭐ Telegram Stars payment "
+                    "will be available shortly."
+                )
+            else:
+                payment_preview = (
+                    "⭐ Le paiement Telegram Stars "
+                    "sera disponible prochainement."
+                )
+
+            bot.send_message(
+                message.chat.id,
+                payment_preview,
+                reply_markup=settings_menu(
+                    language
+                )
+            )
 
     else:
         bot.send_message(
