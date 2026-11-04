@@ -3098,32 +3098,75 @@ def menu(message):
     )
 )
 def handle_profile_unlock_preview(call):
-    bot.answer_callback_query(
-        call.id
+    language = get_user_language(
+        call.from_user.id
     )
 
-    user_id = call.from_user.id
+    from profile_stars_handlers import (
+        send_profile_invoice,
+    )
+
+    send_profile_invoice(
+        bot,
+        call,
+        language,
+    )
+
+
+
+# ============================================
+# ASTROVIBE MINIMAL STARS CONNECTION
+# ============================================
+
+@bot.pre_checkout_query_handler(
+    func=lambda query: (
+        isinstance(query.invoice_payload, str)
+        and query.invoice_payload.startswith(
+            "astrovibe_profile_v2:"
+        )
+    )
+)
+def handle_profile_pre_checkout(query):
+    from profile_stars_handlers import (
+        process_profile_pre_checkout,
+    )
+
+    process_profile_pre_checkout(
+        bot,
+        query,
+    )
+
+
+@bot.message_handler(
+    content_types=["successful_payment"]
+)
+def handle_profile_successful_payment(message):
+    payment = message.successful_payment
+
+    if not isinstance(
+        payment.invoice_payload,
+        str,
+    ):
+        return
+
+    if not payment.invoice_payload.startswith(
+        "astrovibe_profile_v2:"
+    ):
+        return
+
+    from profile_stars_handlers import (
+        process_profile_successful_payment,
+    )
 
     language = get_user_language(
-        user_id
+        message.from_user.id
     )
 
-    if language == "en":
-        text = (
-  "⭐ Telegram Stars payment "
-  "will be available shortly."
-        )
-    else:
-        text = (
-  "⭐ Le paiement Telegram Stars "
-  "sera disponible prochainement."
-        )
-
-    bot.send_message(
-        call.message.chat.id,
-        text
+    process_profile_successful_payment(
+        bot,
+        message,
+        language,
     )
-
 
 # INITIALISATION
 # ==================================================
