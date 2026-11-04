@@ -1,0 +1,393 @@
+name: Rebuild Natal Profile Interpreter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-interpreter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Clean interpreter safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "natal_profile_interpreter.py"
+          )
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          old_count = source.count(
+              r"\]"
+          )
+
+          print(
+              "Parasitic sequences found:",
+              old_count
+          )
+
+          cleaned = source.replace(
+              r"\]",
+              "]"
+          )
+
+          remaining = cleaned.count(
+              r"\]"
+          )
+
+          if remaining != 0:
+              raise SystemExit(
+                  "ERROR: parasitic sequences remain."
+              )
+
+          compile(
+              cleaned,
+              str(path),
+              "exec"
+          )
+
+          path.write_text(
+              cleaned,
+              encoding="utf-8"
+          )
+
+          print(
+              "Interpreter cleaned successfully."
+          )
+          PY
+
+      - name: Validate all Python engines
+        run: |
+          python -m py_compile natal_profile_interpreter.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile personal_profile_engine.py
+          python -m py_compile birth_location_engine.py
+
+      - name: Confirm no parasitic backslashes remain
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path(
+              "natal_profile_interpreter.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          count = text.count(
+              r"\]"
+          )
+
+          print(
+              "Remaining \\] sequences:",
+              count
+          )
+
+          assert count == 0
+
+          print(
+              "No parasitic sequences remain."
+          )
+          PY
+
+      - name: Test French natal profile
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import (
+              calculate_natal_chart
+          )
+
+          from natal_profile_interpreter import (
+              interpret_natal_chart,
+              format_natal_interpretation,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(
+                  2000,
+                  8,
+                  15
+              ),
+              birth_time=time(
+                  14,
+                  35
+              ),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = (
+              interpret_natal_chart(
+                  chart,
+                  language="fr",
+              )
+          )
+
+          assert chart[
+              "calculated"
+          ] is True
+
+          assert interpretation[
+              "available"
+          ] is True
+
+          assert interpretation[
+              "houses_available"
+          ] is True
+
+          sections = interpretation[
+              "sections"
+          ]
+
+          assert len(
+              sections
+          ) == 11
+
+          text = format_natal_interpretation(
+              interpretation,
+              language="fr",
+          )
+
+          assert text
+          assert "Soleil" in text
+          assert "Lune" in text
+          assert "Mercure" in text
+          assert "Vénus" in text
+          assert "Mars" in text
+          assert "Ascendant" in text
+
+          print(
+              "French sections:",
+              len(sections)
+          )
+
+          print()
+          print(text)
+          print()
+          print(
+              "FRENCH PROFILE TEST PASSED"
+          )
+          PY
+
+      - name: Test English natal profile
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import (
+              calculate_natal_chart
+          )
+
+          from natal_profile_interpreter import (
+              interpret_natal_chart,
+              format_natal_interpretation,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(
+                  2000,
+                  8,
+                  15
+              ),
+              birth_time=time(
+                  14,
+                  35
+              ),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = (
+              interpret_natal_chart(
+                  chart,
+                  language="en",
+              )
+          )
+
+          assert chart[
+              "calculated"
+          ] is True
+
+          assert interpretation[
+              "available"
+          ] is True
+
+          assert interpretation[
+              "houses_available"
+          ] is True
+
+          sections = interpretation[
+              "sections"
+          ]
+
+          assert len(
+              sections
+          ) == 11
+
+          text = format_natal_interpretation(
+              interpretation,
+              language="en",
+          )
+
+          assert text
+          assert "Sun" in text
+          assert "Moon" in text
+          assert "Mercury" in text
+          assert "Venus" in text
+          assert "Mars" in text
+          assert "Ascendant" in text
+
+          print(
+              "English sections:",
+              len(sections)
+          )
+
+          print()
+          print(text)
+          print()
+          print(
+              "ENGLISH PROFILE TEST PASSED"
+          )
+          PY
+
+      - name: Test unknown birth time protection
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from natal_chart_engine import (
+              calculate_natal_chart
+          )
+
+          from natal_profile_interpreter import (
+              interpret_natal_chart
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(
+                  2000,
+                  8,
+                  15
+              ),
+              birth_time=None,
+              birth_time_known=False,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = (
+              interpret_natal_chart(
+                  chart,
+                  language="fr",
+              )
+          )
+
+          assert chart[
+              "calculated"
+          ] is True
+
+          assert chart[
+              "ascendant"
+          ] is None
+
+          assert chart[
+              "houses"
+          ] is None
+
+          assert interpretation[
+              "available"
+          ] is True
+
+          assert interpretation[
+              "houses_available"
+          ] is False
+
+          sections = interpretation[
+              "sections"
+          ]
+
+          assert len(
+              sections
+          ) == 10
+
+          for section in sections:
+              assert (
+                  "Ascendant"
+                  not in section.get(
+                      "title",
+                      ""
+                  )
+              )
+
+          print(
+              "Unknown-time sections:",
+              len(sections)
+          )
+
+          print(
+              "Ascendant:",
+              chart["ascendant"]
+          )
+
+          print(
+              "Houses:",
+              chart["houses"]
+          )
+
+          print(
+              "UNKNOWN TIME TEST PASSED"
+          )
+          PY
+
+      - name: Check repository diff
+        run: |
+          git diff --check
+          git diff -- natal_profile_interpreter.py
+
+      - name: Commit validated interpreter
+        run: |
+          if git diff --quiet; then
+            echo "No interpreter changes were required."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add natal_profile_interpreter.py
+
+          git commit -m "Clean and validate natal profile interpreter"
+
+          git push origin HEAD:main
