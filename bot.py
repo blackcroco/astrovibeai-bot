@@ -961,31 +961,58 @@ def settings_menu(language="fr"):
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "settings_sign_button")
+            get_text(
+                language,
+                "settings_sign_button"
+            )
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "language_button")
+            get_text(
+                language,
+                "language_button"
+            )
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "birth_info_button")
+            get_text(
+                language,
+                "birth_info_button"
+            )
+        )
+    )
+
+    profile_button = (
+        "✨ My AstroVibe Profile"
+        if language == "en"
+        else "✨ Mon Profil AstroVibe"
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            profile_button
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "premium_subscription_button")
+            get_text(
+                language,
+                "premium_subscription_button"
+            )
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "back_button")
+            get_text(
+                language,
+                "back_button"
+            )
         )
     )
 
