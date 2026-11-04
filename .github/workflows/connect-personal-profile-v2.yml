@@ -1,0 +1,324 @@
+name: Connect AstroVibe Personal Profile V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  connect-profile-v2:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Patch bot safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          v2_import = (
+              "from personal_profile_v2_engine import "
+              "generate_personal_profile_v2"
+          )
+
+          if v2_import not in source:
+              v1_import = (
+                  "from personal_profile_engine import "
+                  "generate_personal_profile"
+              )
+
+              if v1_import not in source:
+                  raise SystemExit(
+                      "ERROR: V1 profile import not found."
+                  )
+
+              source = source.replace(
+                  v1_import,
+                  v1_import
+                  + "\n"
+                  + v2_import,
+                  1,
+              )
+
+          old_call = '''        profile = generate_personal_profile(
+              sign=sign,
+              language=language,
+              birth_date=birth_info["birth_date"],
+              birth_time=birth_info["birth_time"],
+              birth_time_known=birth_info["birth_time_known"],
+              birth_place=birth_info["birth_place"]
+          )'''
+
+          new_call = '''        profile = generate_personal_profile_v2(
+              sign=sign,
+              language=language,
+              birth_date=birth_info["birth_date"],
+              birth_time=birth_info["birth_time"],
+              birth_time_known=birth_info["birth_time_known"],
+              birth_place=birth_info["birth_place"],
+              birth_timezone=birth_info["birth_timezone"],
+              birth_latitude=birth_info["birth_latitude"],
+              birth_longitude=birth_info["birth_longitude"],
+          )'''
+
+          if new_call not in source:
+              if old_call not in source:
+                  raise SystemExit(
+                      "ERROR: send_personal_profile V1 call "
+                      "was not found exactly."
+                  )
+
+              source = source.replace(
+                  old_call,
+                  new_call,
+                  1,
+              )
+
+          if source.count(
+              "profile = generate_personal_profile_v2("
+          ) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one V2 profile call."
+              )
+
+          required_values = (
+              'birth_info["birth_timezone"]',
+              'birth_info["birth_latitude"]',
+              'birth_info["birth_longitude"]',
+          )
+
+          for required_value in required_values:
+              if required_value not in source:
+                  raise SystemExit(
+                      "ERROR: missing value: "
+                      + required_value
+                  )
+
+          compile(
+              source,
+              "bot.py",
+              "exec"
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8"
+          )
+
+          print(
+              "Telegram Personal Profile V2 "
+              "connection applied."
+          )
+          PY
+
+      - name: Compile all AstroVibe engines
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile personal_profile_engine.py
+          python -m py_compile personal_profile_v2_engine.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile natal_profile_interpreter.py
+          python -m py_compile birth_location_engine.py
+          git diff --check
+
+      - name: Verify bot connection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          checks = (
+              (
+                  "V2 import",
+                  "from personal_profile_v2_engine import "
+                  "generate_personal_profile_v2",
+              ),
+              (
+                  "V2 call",
+                  "profile = generate_personal_profile_v2(",
+              ),
+              (
+                  "timezone",
+                  'birth_timezone=birth_info["birth_timezone"]',
+              ),
+              (
+                  "latitude",
+                  'birth_latitude=birth_info["birth_latitude"]',
+              ),
+              (
+                  "longitude",
+                  'birth_longitude=birth_info["birth_longitude"]',
+              ),
+          )
+
+          for label, expected in checks:
+              if expected not in source:
+                  raise SystemExit(
+                      "ERROR: missing bot connection: "
+                      + label
+                  )
+
+              print(
+                  "OK:",
+                  label
+              )
+
+          print(
+              "BOT CONNECTION TEST PASSED"
+          )
+          PY
+
+      - name: Test French V2 engine
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from personal_profile_v2_engine import (
+              generate_personal_profile_v2,
+          )
+
+          profile = generate_personal_profile_v2(
+              sign="leo",
+              language="fr",
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "TON THÈME NATAL PERSONNALISÉ" in profile
+          assert "Soleil" in profile
+          assert "Lune" in profile
+          assert "Ascendant" in profile
+
+          print(
+              "French V2 length:",
+              len(profile)
+          )
+
+          print(
+              "FRENCH TELEGRAM V2 TEST PASSED"
+          )
+          PY
+
+      - name: Test English V2 engine
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from personal_profile_v2_engine import (
+              generate_personal_profile_v2,
+          )
+
+          profile = generate_personal_profile_v2(
+              sign="leo",
+              language="en",
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "YOUR PERSONAL NATAL CHART" in profile
+          assert "Sun" in profile
+          assert "Moon" in profile
+          assert "Ascendant" in profile
+
+          print(
+              "English V2 length:",
+              len(profile)
+          )
+
+          print(
+              "ENGLISH TELEGRAM V2 TEST PASSED"
+          )
+          PY
+
+      - name: Test unknown birth time
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from personal_profile_v2_engine import (
+              generate_personal_profile_v2,
+          )
+
+          profile = generate_personal_profile_v2(
+              sign="leo",
+              language="fr",
+              birth_date=date(2000, 8, 15),
+              birth_time=None,
+              birth_time_known=False,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "TON THÈME NATAL PERSONNALISÉ" in profile
+          assert "Soleil" in profile
+          assert "Lune" in profile
+
+          assert (
+              "Ascendant — Expression extérieure"
+              not in profile
+          )
+
+          print(
+              "UNKNOWN-TIME TELEGRAM V2 TEST PASSED"
+          )
+          PY
+
+      - name: Show bot diff
+        run: |
+          git diff --check
+          git diff -- bot.py
+
+      - name: Commit validated Telegram connection
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add bot.py
+
+          git commit -m "Connect Personal Profile V2 to Telegram"
+
+          git push origin HEAD:main
