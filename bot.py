@@ -3054,13 +3054,37 @@ def menu(message):
                     "⭐ PRIX DE LANCEMENT : 390 STARS"
                 )
 
+                        offer_markup = types.ReplyKeyboardMarkup(
+                resize_keyboard=True
+            )
+
+            unlock_button = (
+                "✨ Unlock My Profile · 390 ⭐"
+                if language == "en"
+                else "✨ Débloquer mon Profil · 390 ⭐"
+            )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    unlock_button
+                )
+            )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    get_text(
+                        language,
+                        "back_button"
+                    )
+                )
+            )
+
             bot.send_message(
                 message.chat.id,
                 offer_text,
-                reply_markup=settings_menu(
-                    language
-                )
+                reply_markup=offer_markup
             )
+
 
     else:
         bot.send_message(
