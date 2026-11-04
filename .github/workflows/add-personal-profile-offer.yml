@@ -26,34 +26,95 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Patch commercial offer
+      - name: Patch commercial offer with AST
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
+          import ast
 
           path = Path("bot.py")
-          source = path.read_text(encoding="utf-8")
 
-          marker = (
-              "# ASTROVIBE COMMERCIAL PROFILE OFFER V1"
+          source = path.read_text(
+              encoding="utf-8"
           )
 
-          if marker not in source:
-              settings_match = re.search(
-                  r'(?m)^def\s+settings_menu\s*\(',
-                  source,
+          marker = (
+              "# ASTROVIBE COMMERCIAL PROFILE OFFER V2"
+          )
+
+          if marker in source:
+              print(
+                  "Commercial offer is already installed."
               )
 
-              if not settings_match:
-                  raise SystemExit(
-                      "ERROR: settings_menu function "
-                      "was not found."
-                  )
+              compile(
+                  source,
+                  "bot.py",
+                  "exec"
+              )
 
-              helper = r'''
+              raise SystemExit(0)
+
+          tree = ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+          settings_functions = [
+              node
+              for node in tree.body
+              if isinstance(
+                  node,
+                  ast.FunctionDef
+              )
+              and node.name == "settings_menu"
+          ]
+
+          if len(settings_functions) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one "
+                  "settings_menu function, found "
+                  + str(
+                      len(settings_functions)
+                  )
+              )
+
+          settings_function = settings_functions[0]
+
+          return_nodes = [
+              node
+              for node in settings_function.body
+              if isinstance(
+                  node,
+                  ast.Return
+              )
+              and isinstance(
+                  node.value,
+                  ast.Name
+              )
+              and node.value.id == "markup"
+          ]
+
+          if len(return_nodes) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one "
+                  "return markup in settings_menu, found "
+                  + str(
+                      len(return_nodes)
+                  )
+              )
+
+          return_node = return_nodes[0]
+
+          if settings_function.end_lineno is None:
+              raise SystemExit(
+                  "ERROR: settings_menu end line "
+                  "is unavailable."
+              )
+
+          helper_block = r'''
           # ============================================
-          # ASTROVIBE COMMERCIAL PROFILE OFFER V1
+          # ASTROVIBE COMMERCIAL PROFILE OFFER V2
           # ============================================
 
           PROFILE_OFFER_BUTTONS = {
@@ -71,9 +132,11 @@ jobs:
               if language == "en":
                   return (
                       "✨ YOUR ASTROVIBE PERSONAL PROFILE\n\n"
-                      "Your Sun sign is only one part of your story. 🌌\n\n"
-                      "Discover a personalised astrological reading built "
-                      "from your birth information and natal chart.\n\n"
+                      "Your Sun sign is only one part "
+                      "of your story. 🌌\n\n"
+                      "Discover a personalised astrological "
+                      "reading built from your birth information "
+                      "and natal chart.\n\n"
                       "🔮 YOUR PROFILE EXPLORES:\n\n"
                       "☀️ Sun\n"
                       "Your identity and self-expression\n\n"
@@ -88,7 +151,8 @@ jobs:
                       "♃ Jupiter\n"
                       "Your potential for expansion\n\n"
                       "♄ Saturn\n"
-                      "Your responsibilities and areas of growth\n\n"
+                      "Your responsibilities and areas "
+                      "of growth\n\n"
                       "♅ Uranus\n"
                       "Your need for freedom and change\n\n"
                       "♆ Neptune\n"
@@ -98,7 +162,8 @@ jobs:
                       "✨ IF YOUR EXACT BIRTH TIME IS KNOWN:\n\n"
                       "⬆️ Your Ascendant\n"
                       "🏠 Your astrological houses\n"
-                      "🪐 The life areas connected to your placements\n\n"
+                      "🪐 The life areas connected "
+                      "to your placements\n\n"
                       "🌍 Available in French and English\n\n"
                       "🔓 One-time purchase\n"
                       "💎 No Premium subscription required\n\n"
@@ -110,14 +175,16 @@ jobs:
                   "✨ TON PROFIL ASTROVIBE PERSONNEL\n\n"
                   "Ton signe solaire n’est qu’une partie "
                   "de ton histoire. 🌌\n\n"
-                  "Découvre une lecture astrologique personnalisée "
-                  "construite à partir de tes informations de naissance "
-                  "et de ton thème natal.\n\n"
+                  "Découvre une lecture astrologique "
+                  "personnalisée construite à partir de tes "
+                  "informations de naissance et de ton "
+                  "thème natal.\n\n"
                   "🔮 TON PROFIL EXPLORE :\n\n"
                   "☀️ Soleil\n"
                   "Ton identité et ta manière de t’affirmer\n\n"
                   "🌙 Lune\n"
-                  "Ton univers émotionnel et tes besoins profonds\n\n"
+                  "Ton univers émotionnel et tes besoins "
+                  "profonds\n\n"
                   "☿ Mercure\n"
                   "Ta façon de penser et de communiquer\n\n"
                   "♀ Vénus\n"
@@ -127,17 +194,20 @@ jobs:
                   "♃ Jupiter\n"
                   "Ton potentiel d’expansion\n\n"
                   "♄ Saturne\n"
-                  "Tes responsabilités et tes zones de construction\n\n"
+                  "Tes responsabilités et tes zones "
+                  "de construction\n\n"
                   "♅ Uranus\n"
                   "Ton besoin de liberté et de changement\n\n"
                   "♆ Neptune\n"
                   "Ton imagination et ton intuition\n\n"
                   "♇ Pluton\n"
                   "Tes transformations profondes\n\n"
-                  "✨ SI TON HEURE DE NAISSANCE EST CONNUE :\n\n"
+                  "✨ SI TON HEURE DE NAISSANCE "
+                  "EST CONNUE :\n\n"
                   "⬆️ Ton Ascendant\n"
                   "🏠 Tes maisons astrologiques\n"
-                  "🪐 Les domaines de vie associés à tes placements\n\n"
+                  "🪐 Les domaines de vie associés "
+                  "à tes placements\n\n"
                   "🌍 Disponible en français et en anglais\n\n"
                   "🔓 Achat unique\n"
                   "💎 Aucun abonnement Premium nécessaire\n\n"
@@ -151,7 +221,7 @@ jobs:
                   resize_keyboard=True
               )
 
-              key = (
+              language_key = (
                   "en"
                   if language == "en"
                   else "fr"
@@ -159,7 +229,9 @@ jobs:
 
               markup.row(
                   types.KeyboardButton(
-                      PROFILE_UNLOCK_BUTTONS[key]
+                      PROFILE_UNLOCK_BUTTONS[
+                          language_key
+                      ]
                   )
               )
 
@@ -177,99 +249,37 @@ jobs:
 
           '''
 
-              helper = (
-                  helper.replace(
-                      "\n          ",
-                      "\n"
-                  ).lstrip()
-              )
-
-              source = (
-                  source[:settings_match.start()]
-                  + helper
-                  + source[settings_match.start():]
-              )
-
-          settings_pattern = re.compile(
-              r'(?ms)'
-              r'^(?P<head>def\s+settings_menu\s*$$[^\n]*$$:\n)'
-              r'(?P<body>.*?)'
-              r'^(?P<indent>[ \t]+)return\s+markup\s*$'
+          helper_block = (
+              helper_block.replace(
+                  "\n          ",
+                  "\n"
+              ).lstrip()
           )
 
-          settings_match = settings_pattern.search(
-              source
-          )
-
-          if not settings_match:
-              raise SystemExit(
-                  "ERROR: complete settings_menu "
-                  "could not be detected."
-              )
-
-          body = settings_match.group("body")
-
-          if "PROFILE_OFFER_BUTTONS" not in body:
-              back_pattern = re.compile(
-                  r'(?ms)'
-                  r'^(?P<indent>[ \t]+)'
-                  r'markup\.row\(\n'
-                  r'.*?'
-                  r'"back_button"'
-                  r'.*?'
-                  r'^(?P=indent)\)\n'
-              )
-
-              back_match = back_pattern.search(
-                  body
-              )
-
-              if not back_match:
-                  raise SystemExit(
-                      "ERROR: Back row was not found "
-                      "inside settings_menu."
+          settings_button_block = r'''
+              markup.row(
+                  types.KeyboardButton(
+                      PROFILE_OFFER_BUTTONS[
+                          "en"
+                          if language == "en"
+                          else "fr"
+                      ]
                   )
-
-              indent = back_match.group(
-                  "indent"
               )
 
-              new_row = "\n".join(
-                  [
-                      indent + "markup.row(",
-                      indent + "    types.KeyboardButton(",
-                      indent + "        PROFILE_OFFER_BUTTONS[",
-                      indent + '            "en"',
-                      indent + '            if language == "en"',
-                      indent + '            else "fr"',
-                      indent + "        ]",
-                      indent + "    )",
-                      indent + ")",
-                      "",
-                  ]
-              )
+          '''
 
-              body = (
-                  body[:back_match.start()]
-                  + new_row
-                  + body[back_match.start():]
-              )
-
-              source = (
-                  source[:settings_match.start("body")]
-                  + body
-                  + source[settings_match.end("body"):]
-              )
-
-          handler_marker = (
-              "# ASTROVIBE PROFILE OFFER MESSAGE HANDLER"
+          settings_button_block = (
+              settings_button_block.replace(
+                  "\n          ",
+                  "\n"
+              ).lstrip()
           )
 
-          if handler_marker not in source:
-              handler = r'''
+          handlers_block = r'''
 
           # ============================================
-          # ASTROVIBE PROFILE OFFER MESSAGE HANDLER
+          # ASTROVIBE PROFILE OFFER HANDLERS
           # ============================================
 
           @bot.message_handler(
@@ -279,10 +289,11 @@ jobs:
               )
           )
           def show_personal_profile_offer(message):
-              create_or_update_user(message)
-
               user_id = message.from_user.id
-              language = get_user_language(user_id)
+
+              language = get_user_language(
+                  user_id
+              )
 
               bot.send_message(
                   message.chat.id,
@@ -302,25 +313,26 @@ jobs:
               )
           )
           def personal_profile_payment_preview(message):
-              create_or_update_user(message)
-
               user_id = message.from_user.id
-              language = get_user_language(user_id)
+
+              language = get_user_language(
+                  user_id
+              )
 
               if language == "en":
-                  text = (
+                  preview_text = (
                       "⭐ Telegram Stars payment "
                       "will be available shortly."
                   )
               else:
-                  text = (
+                  preview_text = (
                       "⭐ Le paiement Telegram Stars "
                       "sera disponible prochainement."
                   )
 
               bot.send_message(
                   message.chat.id,
-                  text,
+                  preview_text,
                   reply_markup=settings_menu(
                       language
                   )
@@ -329,32 +341,107 @@ jobs:
 
           '''
 
-              handler = (
-                  handler.replace(
-                      "\n          ",
-                      "\n"
-                  ).lstrip()
+          handlers_block = (
+              handlers_block.replace(
+                  "\n          ",
+                  "\n"
+              ).lstrip()
+          )
+
+          lines = source.splitlines(
+              keepends=True
+          )
+
+          helper_position = (
+              settings_function.lineno - 1
+          )
+
+          return_position = (
+              return_node.lineno - 1
+          )
+
+          handlers_position = (
+              settings_function.end_lineno
+          )
+
+          insertions = [
+              (
+                  handlers_position,
+                  "\n"
+                  + handlers_block
+              ),
+              (
+                  return_position,
+                  settings_button_block
+              ),
+              (
+                  helper_position,
+                  helper_block
+                  + "\n"
+              ),
+          ]
+
+          for position, content in sorted(
+              insertions,
+              key=lambda item: item[0],
+              reverse=True,
+          ):
+              lines.insert(
+                  position,
+                  content
               )
 
-              source = (
-                  source.rstrip()
-                  + "\n\n"
-                  + handler
-              )
+          updated = "".join(
+              lines
+          )
 
           compile(
-              source,
+              updated,
               "bot.py",
               "exec"
           )
 
+          if marker not in updated:
+              raise SystemExit(
+                  "ERROR: commercial marker "
+                  "was not inserted."
+              )
+
+          if updated.count(
+              "PROFILE_OFFER_BUTTONS"
+          ) < 3:
+              raise SystemExit(
+                  "ERROR: offer button integration "
+                  "is incomplete."
+              )
+
+          if updated.count(
+              "PROFILE_UNLOCK_BUTTONS"
+          ) < 3:
+              raise SystemExit(
+                  "ERROR: unlock button integration "
+                  "is incomplete."
+              )
+
           path.write_text(
-              source,
+              updated,
               encoding="utf-8"
           )
 
           print(
-              "Commercial offer patch applied."
+              "AST commercial offer patch applied."
+          )
+
+          print(
+              "settings_menu lines:",
+              settings_function.lineno,
+              "-",
+              settings_function.end_lineno
+          )
+
+          print(
+              "return markup line:",
+              return_node.lineno
           )
           PY
 
@@ -372,6 +459,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import ast
 
           source = Path(
               "bot.py"
@@ -379,23 +467,26 @@ jobs:
               encoding="utf-8"
           )
 
-          required = (
-              "ASTROVIBE COMMERCIAL PROFILE OFFER V1",
+          expected = (
+              "ASTROVIBE COMMERCIAL PROFILE OFFER V2",
               "PROFILE_OFFER_BUTTONS",
               "PROFILE_UNLOCK_BUTTONS",
               "personal_profile_offer_text",
               "personal_profile_offer_menu",
-              "ASTROVIBE PROFILE OFFER MESSAGE HANDLER",
+              "ASTROVIBE PROFILE OFFER HANDLERS",
+              "show_personal_profile_offer",
+              "personal_profile_payment_preview",
               "TON PROFIL ASTROVIBE PERSONNEL",
               "YOUR ASTROVIBE PERSONAL PROFILE",
               "390 STARS",
               "390 ⭐",
           )
 
-          for item in required:
+          for item in expected:
               if item not in source:
                   raise SystemExit(
-                      "ERROR: missing: "
+                      "ERROR: missing commercial "
+                      "element: "
                       + item
                   )
 
@@ -403,6 +494,25 @@ jobs:
                   "OK:",
                   item
               )
+
+          tree = ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+          settings_functions = [
+              node
+              for node in tree.body
+              if isinstance(
+                  node,
+                  ast.FunctionDef
+              )
+              and node.name == "settings_menu"
+          ]
+
+          assert len(
+              settings_functions
+          ) == 1
 
           print(
               "COMMERCIAL OFFER VERIFIED"
