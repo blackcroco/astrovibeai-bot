@@ -551,7 +551,8 @@ def interpret_ascendant(
 
     if sign_key not in SIGN_STYLE[
         language
-    \]:
+    ]:
+
 
         return None
 
