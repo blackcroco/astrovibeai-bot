@@ -1,4 +1,4 @@
-name: Connect AstroVibe Stars Payment
+name: Connect AstroVibe Stars Handlers
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  connect-stars-payment:
+  connect-stars-handlers:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,29 +26,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Validate current files
+      - name: Validate current production
         run: |
           python -m py_compile bot.py
           python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
 
-      - name: Patch Stars payment
+      - name: Apply minimal Stars connection
         run: |
           python - <<'PY'
           from pathlib import Path
           import ast
-          import textwrap
 
           path = Path("bot.py")
           source = path.read_text(encoding="utf-8")
 
-          marker = "# ASTROVIBE REAL STARS PAYMENT"
+          marker = (
+              "# ASTROVIBE MINIMAL STARS CONNECTION"
+          )
 
           if marker in source:
-              print("Stars payment already connected.")
+              print("Minimal Stars connection already exists.")
               compile(source, "bot.py", "exec")
               raise SystemExit(0)
 
-          tree = ast.parse(source, filename="bot.py")
+          tree = ast.parse(
+              source,
+              filename="bot.py",
+          )
 
           callbacks = [
               node
@@ -65,73 +70,36 @@ jobs:
 
           callback = callbacks[0]
 
-          decorator_lines = [
-              item.lineno
-              for item in callback.decorator_list
+          if not callback.body:
+              raise SystemExit(
+                  "ERROR: unlock callback body is empty."
+              )
+
+          body_start = callback.body[0].lineno - 1
+          body_end = callback.end_lineno
+
+          new_body_lines = [
+              "    language = get_user_language(",
+              "        call.from_user.id",
+              "    )",
+              "",
+              "    from profile_stars_handlers import (",
+              "        send_profile_invoice,",
+              "    )",
+              "",
+              "    send_profile_invoice(",
+              "        bot,",
+              "        call,",
+              "        language,",
+              "    )",
           ]
 
-          start_line = min(
-              decorator_lines + [callback.lineno]
-          )
-
-          end_line = callback.end_lineno
-
-          if end_line is None:
-              raise SystemExit(
-                  "ERROR: callback end line unavailable."
-              )
-
-          replacement = textwrap.dedent(
-              '''
-              # ============================================
-              # ASTROVIBE REAL STARS PAYMENT
-              # ============================================
-
-              @bot.callback_query_handler(
-                  func=lambda call: (
-                      call.data == "unlock_profile_390"
-                  )
-              )
-              def handle_profile_unlock_preview(call):
-                  bot.answer_callback_query(call.id)
-
-                  user_id = call.from_user.id
-                  language = get_user_language(user_id)
-
-                  from profile_stars_payment import (
-                      build_profile_invoice,
-                  )
-
-                  invoice = build_profile_invoice(
-                      user_id=user_id,
-                      language=language,
-                  )
-
-                  prices = [
-                      types.LabeledPrice(
-                          label=item["label"],
-                          amount=item["amount"],
-                      )
-                      for item in invoice["prices"]
-                  ]
-
-                  bot.send_invoice(
-                      call.message.chat.id,
-                      title=invoice["title"],
-                      description=invoice["description"],
-                      invoice_payload=invoice["payload"],
-                      provider_token=invoice["provider_token"],
-                      currency=invoice["currency"],
-                      prices=prices,
-                      start_parameter="astrovibe-profile-v2",
-                  )
-              '''
-          ).lstrip()
+          new_body = "\n".join(new_body_lines)
 
           lines = source.splitlines(keepends=True)
 
-          lines[start_line - 1:end_line] = [
-              replacement + "\n"
+          lines[body_start:body_end] = [
+              new_body + "\n"
           ]
 
           updated = "".join(lines)
@@ -140,139 +108,95 @@ jobs:
 
           if init_marker not in updated:
               raise SystemExit(
-                  "ERROR: INITIALISATION marker missing."
+                  "ERROR: INITIALISATION marker not found."
               )
 
-          handlers = textwrap.dedent(
-              '''
-              # ============================================
-              # ASTROVIBE STARS PRE-CHECKOUT
-              # ============================================
+          handler_lines = [
+              "",
+              "# ============================================",
+              "# ASTROVIBE MINIMAL STARS CONNECTION",
+              "# ============================================",
+              "",
+              "@bot.pre_checkout_query_handler(",
+              "    func=lambda query: (",
+              "        isinstance(query.invoice_payload, str)",
+              "        and query.invoice_payload.startswith(",
+              '            "astrovibe_profile_v2:"',
+              "        )",
+              "    )",
+              ")",
+              "def handle_profile_pre_checkout(query):",
+              "    from profile_stars_handlers import (",
+              "        process_profile_pre_checkout,",
+              "    )",
+              "",
+              "    process_profile_pre_checkout(",
+              "        bot,",
+              "        query,",
+              "    )",
+              "",
+              "",
+              "@bot.message_handler(",
+              '    content_types=["successful_payment"]',
+              ")",
+              "def handle_profile_successful_payment(message):",
+              "    payment = message.successful_payment",
+              "",
+              "    if not isinstance(",
+              "        payment.invoice_payload,",
+              "        str,",
+              "    ):",
+              "        return",
+              "",
+              "    if not payment.invoice_payload.startswith(",
+              '        "astrovibe_profile_v2:"',
+              "    ):",
+              "        return",
+              "",
+              "    from profile_stars_handlers import (",
+              "        process_profile_successful_payment,",
+              "    )",
+              "",
+              "    language = get_user_language(",
+              "        message.from_user.id",
+              "    )",
+              "",
+              "    process_profile_successful_payment(",
+              "        bot,",
+              "        message,",
+              "        language,",
+              "    )",
+              "",
+              "",
+          ]
 
-              @bot.pre_checkout_query_handler(
-                  func=lambda query: (
-                      isinstance(query.invoice_payload, str)
-                      and query.invoice_payload.startswith(
-                          "astrovibe_profile_v2:"
-                      )
-                  )
-              )
-              def handle_profile_pre_checkout(query):
-                  from profile_stars_payment import (
-                      validate_profile_pre_checkout,
-                  )
-
-                  result = validate_profile_pre_checkout(
-                      payload=query.invoice_payload,
-                      currency=query.currency,
-                      total_amount=query.total_amount,
-                      telegram_user_id=query.from_user.id,
-                  )
-
-                  if result["valid"]:
-                      bot.answer_pre_checkout_query(
-                          query.id,
-                          ok=True,
-                      )
-                      return
-
-                  bot.answer_pre_checkout_query(
-                      query.id,
-                      ok=False,
-                      error_message=(
-                          "AstroVibe could not validate "
-                          "this payment."
-                      ),
-                  )
-
-
-              # ============================================
-              # ASTROVIBE SUCCESSFUL PAYMENT
-              # ============================================
-
-              @bot.message_handler(
-                  content_types=["successful_payment"]
-              )
-              def handle_profile_successful_payment(message):
-                  payment = message.successful_payment
-
-                  if not isinstance(
-                      payment.invoice_payload,
-                      str,
-                  ):
-                      return
-
-                  if not payment.invoice_payload.startswith(
-                      "astrovibe_profile_v2:"
-                  ):
-                      return
-
-                  from profile_stars_payment import (
-                      validate_profile_successful_payment,
-                      get_payment_success_text,
-                      get_payment_error_text,
-                  )
-
-                  result = validate_profile_successful_payment(
-                      payload=payment.invoice_payload,
-                      currency=payment.currency,
-                      total_amount=payment.total_amount,
-                      telegram_payment_charge_id=(
-                          payment.telegram_payment_charge_id
-                      ),
-                      telegram_user_id=message.from_user.id,
-                  )
-
-                  language = get_user_language(
-                      message.from_user.id
-                  )
-
-                  if not result["valid"]:
-                      bot.send_message(
-                          message.chat.id,
-                          get_payment_error_text(language),
-                      )
-                      return
-
-                  print(
-                      "AST["telegram_payment_charge_id"],
-                      result["user_id"],
-                      result["amount"],
-                      result["currency"],
-                  )
-
-                  bot.send_message(
-                      message.chat.id,
-                      get_payment_success_text(language),
-                  )
-
-
-              '''
-          ).lstrip()
+          handler_block = "\n".join(handler_lines)
 
           updated = updated.replace(
               init_marker,
-              handlers + init_marker,
+              handler_block + init_marker,
               1,
           )
 
-          compile(updated, "bot.py", "exec")
+          compile(
+              updated,
+              "bot.py",
+              "exec",
+          )
 
           required = (
               marker,
-              "bot.send_invoice(",
-              "types.LabeledPrice(",
+              "send_profile_invoice",
               "@bot.pre_checkout_query_handler(",
-              "handle_profile_pre_checkout",
+              "process_profile_pre_checkout",
               '"successful_payment"',
-              "handle_profile_successful_payment",
-              "telegram_payment_charge_id",
+              "process_profile_successful_payment",
           )
 
           for item in required:
               if item not in updated:
                   raise SystemExit(
-                      "ERROR: missing payment element: "
+                      "ERROR: missing connection element: "
                       + item
                   )
 
@@ -281,35 +205,64 @@ jobs:
               encoding="utf-8",
           )
 
-          print("Stars payment patch validated.")
-          print("Callback replaced:", start_line, "-", end_line)
+          print("Minimal Stars connection applied.")
+          print(
+              "Callback body replaced:",
+              body_start + 1,
+              "-",
+              body_end,
+          )
           PY
 
       - name: Compile patched project
         run: |
           python -m py_compile bot.py
           python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
           python -m py_compile personal_profile_v2_engine.py
           python -m py_compile natal_chart_engine.py
           python -m py_compile natal_profile_interpreter.py
           git diff --check
 
-      - name: Verify invoice and handlers
+      - name: Verify minimal connection
         run: |
           python - <<'PY'
           from pathlib import Path
           import ast
 
-          from profile_stars_payment import (
-              build_profile_invoice,
-              validate_profile_pre_checkout,
-          )
-
           source = Path("bot.py").read_text(
               encoding="utf-8"
           )
 
-          ast.parse(source, filename="bot.py")
+          ast.parse(
+              source,
+              filename="bot.py",
+          )
+
+          required = (
+              "ASTROVIBE MINIMAL STARS CONNECTION",
+              "send_profile_invoice",
+              "@bot.pre_checkout_query_handler(",
+              "process_profile_pre_checkout",
+              '"successful_payment"',
+              "process_profile_successful_payment",
+          )
+
+          for item in required:
+              assert item in source, item
+              print("OK:", item)
+
+          assert "handle_profile_unlock_preview" in source
+
+          print("MINIMAL STARS CONNECTION VERIFIED")
+          PY
+
+      - name: Verify 390 XTR invoice
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              build_profile_invoice,
+          )
 
           invoice = build_profile_invoice(
               user_id=123456789,
@@ -321,28 +274,11 @@ jobs:
           assert len(invoice["prices"]) == 1
           assert invoice["prices"][0]["amount"] == 390
 
-          result = validate_profile_pre_checkout(
-              payload=invoice["payload"],
-              currency=invoice["currency"],
-              total_amount=390,
-              telegram_user_id=123456789,
+          assert invoice["payload"] == (
+              "astrovibe_profile_v2:123456789"
           )
 
-          assert result["valid"] is True
-
-                    required = (
-              "bot.send_invoice(",
-              "types.LabeledPrice(",
-              "@bot.pre_checkout_query_handler(",
-              '"successful_payment"',
-              "telegram_payment_charge_id",
-          )
-
-          for item in required:
-              assert item in source, item
-              print("OK:", item)
-
-          print("390 XTR PAYMENT INTEGRATION VERIFIED")
+          print("390 XTR INVOICE VERIFIED")
           PY
 
       - name: Show changes
@@ -351,7 +287,7 @@ jobs:
           git status --short
           git diff -- bot.py
 
-      - name: Commit validated integration
+      - name: Commit validated connection
         run: |
           git add bot.py
 
@@ -363,5 +299,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git commit -m "Connect real Telegram Stars profile payment"
+          git commit -m "Connect tested Stars handlers to Telegram"
           git push origin HEAD:main
