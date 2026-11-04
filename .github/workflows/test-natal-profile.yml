@@ -1,0 +1,164 @@
+name: Test AstroVibe Natal Profile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-natal-profile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test French profile with exact time
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import calculate_natal_chart
+          from natal_profile_interpreter import (
+              interpret_natal_chart,
+              format_natal_interpretation,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = interpret_natal_chart(
+              chart,
+              language="fr",
+          )
+
+          print("=== PROFIL NATAL FR ===")
+          print("Available:", interpretation.get("available"))
+          print("Houses:", interpretation.get("houses_available"))
+          print("Sections:", len(interpretation.get("sections", [])))
+          print()
+
+          print(
+              format_natal_interpretation(
+                  interpretation,
+                  language="fr",
+              )
+          )
+
+          assert chart.get("calculated") is True
+          assert interpretation.get("available") is True
+          assert interpretation.get("houses_available") is True
+          assert len(interpretation.get("sections", [])) == 11
+
+          print()
+          print("FR TEST PASSED")
+          PY
+
+      - name: Test English profile with exact time
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from natal_chart_engine import calculate_natal_chart
+          from natal_profile_interpreter import (
+              interpret_natal_chart,
+              format_natal_interpretation,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = interpret_natal_chart(
+              chart,
+              language="en",
+          )
+
+          print("=== NATAL PROFILE EN ===")
+          print("Available:", interpretation.get("available"))
+          print("Houses:", interpretation.get("houses_available"))
+          print("Sections:", len(interpretation.get("sections", [])))
+          print()
+
+          print(
+              format_natal_interpretation(
+                  interpretation,
+                  language="en",
+              )
+          )
+
+          assert chart.get("calculated") is True
+          assert interpretation.get("available") is True
+          assert interpretation.get("houses_available") is True
+          assert len(interpretation.get("sections", [])) == 11
+
+          print()
+          print("EN TEST PASSED")
+          PY
+
+      - name: Test unknown birth time protection
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from natal_chart_engine import calculate_natal_chart
+          from natal_profile_interpreter import (
+              interpret_natal_chart,
+          )
+
+          chart = calculate_natal_chart(
+              birth_date=date(2000, 8, 15),
+              birth_time=None,
+              birth_time_known=False,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          interpretation = interpret_natal_chart(
+              chart,
+              language="fr",
+          )
+
+          print("=== HEURE INCONNUE ===")
+          print("Calculated:", chart.get("calculated"))
+          print("Ascendant:", chart.get("ascendant"))
+          print("Houses:", chart.get("houses"))
+          print("Sections:", len(interpretation.get("sections", [])))
+
+          assert chart.get("calculated") is True
+          assert chart.get("ascendant") is None
+          assert chart.get("houses") is None
+
+          assert interpretation.get("available") is True
+          assert interpretation.get("houses_available") is False
+          assert len(interpretation.get("sections", [])) == 10
+
+          for section in interpretation.get("sections", []):
+              assert "Ascendant" not in section.get("title", "")
+
+          print()
+          print("UNKNOWN TIME TEST PASSED")
+          PY
