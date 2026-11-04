@@ -389,7 +389,8 @@ def interpret_placement(
 
     if sign_key not in SIGN_STYLE[
         language
-    \]:
+]:
+
         return None
 
     sign_name = SIGN_NAMES[
