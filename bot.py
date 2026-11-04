@@ -16,6 +16,7 @@ from compatibility_engine_en import generate_compatibility_en
 from weekly_engine import generate_weekly_horoscope
 from premium_engine import generate_premium_feature
 from personal_profile_engine import generate_personal_profile
+from personal_profile_v2_engine import generate_personal_profile_v2
 from birth_location_engine import resolve_birth_location, format_location_label
 
 from translations import get_text
@@ -276,13 +277,16 @@ def send_personal_profile(chat_id, user_id):
         return
 
     try:
-        profile = generate_personal_profile(
+        profile = generate_personal_profile_v2(
             sign=sign,
             language=language,
             birth_date=birth_info["birth_date"],
             birth_time=birth_info["birth_time"],
             birth_time_known=birth_info["birth_time_known"],
             birth_place=birth_info["birth_place"],
+            birth_timezone=birth_info["birth_timezone"],
+            birth_latitude=birth_info["birth_latitude"],
+            birth_longitude=birth_info["birth_longitude"],
         )
 
     except ValueError as error:
