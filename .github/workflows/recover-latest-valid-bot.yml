@@ -1,0 +1,203 @@
+name: Recover Latest Valid AstroVibe Bot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recover-latest-valid-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Find latest valid bot.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          commits = subprocess.check_output(
+              [
+                  "git",
+                  "rev-list",
+                  "--max-count=100",
+                  "HEAD",
+                  "--",
+                  "bot.py",
+              ],
+              text=True,
+          ).splitlines()
+
+          if not commits:
+              raise SystemExit(
+                  "ERROR: no bot.py history found."
+              )
+
+          required_markers = (
+              "generate_personal_profile_v2",
+              "TON PROFIL ASTROVIBE PERSONNEL",
+              "✨ Mon Profil AstroVibe",
+          )
+
+          selected_commit = None
+          selected_source = None
+
+          for commit in commits:
+              result = subprocess.run(
+                  [
+                      "git",
+                      "show",
+                      f"{commit}:bot.py",
+                  ],
+                  text=True,
+                  capture_output=True,
+              )
+
+              if result.returncode != 0:
+                  continue
+
+              candidate = result.stdout
+
+              if not all(
+                  marker in candidate
+                  for marker in required_markers
+              ):
+                  print(
+                      "SKIP missing features:",
+                      commit[:8],
+                  )
+                  continue
+
+              try:
+                  compile(
+                      candidate,
+                      "bot.py",
+                      "exec",
+                  )
+              except SyntaxError as error:
+                  print(
+                      "SKIP invalid syntax:",
+                      commit[:8],
+                      f"line {error.lineno}:",
+                      error.msg,
+                  )
+                  continue
+
+              selected_commit = commit
+              selected_source = candidate
+
+              print(
+                  "SELECTED VALID COMMIT:",
+                  commit,
+              )
+
+              break
+
+          if selected_commit is None:
+              raise SystemExit(
+                  "ERROR: no recent bot.py version "
+                  "contains the V2 profile, commercial "
+                  "page and valid Python syntax."
+              )
+
+          Path("bot.py").write_text(
+              selected_source,
+              encoding="utf-8",
+          )
+
+          Path(
+              "selected_bot_commit.txt"
+          ).write_text(
+              selected_commit + "\n",
+              encoding="utf-8",
+          )
+
+          print(
+              "Recovered bot.py from:",
+              selected_commit,
+          )
+          PY
+
+      - name: Validate recovered bot
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile personal_profile_engine.py
+          python -m py_compile personal_profile_v2_engine.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile natal_profile_interpreter.py
+          git diff --check
+
+      - name: Verify critical features
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8",
+          )
+
+          required = (
+              "generate_personal_profile_v2",
+              "birth_timezone",
+              "birth_latitude",
+              "birth_longitude",
+              "✨ Mon Profil AstroVibe",
+              "TON PROFIL ASTROVIBE PERSONNEL",
+              "PRIX DE LANCEMENT : 390 STARS",
+          )
+
+          for marker in required:
+              if marker not in source:
+                  raise SystemExit(
+                      "ERROR: recovered bot is missing: "
+                      + marker
+                  )
+
+              print(
+                  "OK:",
+                  marker,
+              )
+
+          print(
+              "RECOVERED BOT VERIFIED"
+          )
+          PY
+
+      - name: Show recovery information
+        run: |
+          echo "Recovered from commit:"
+          cat selected_bot_commit.txt
+          git status --short
+          git diff --stat
+          git diff --check
+
+      - name: Commit recovered bot
+        run: |
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "Current bot.py is already the latest valid version."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          RECOVERED_FROM="$(cat selected_bot_commit.txt)"
+
+          git commit -m "Recover latest valid AstroVibe bot from ${RECOVERED_FROM}"
+
+          git push origin HEAD:main
