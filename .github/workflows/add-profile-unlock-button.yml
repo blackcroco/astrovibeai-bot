@@ -1,0 +1,367 @@
+name: Add Profile Unlock Button Safely
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  add-unlock-button:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Patch unlock button safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE PROFILE UNLOCK CALLBACK"
+          )
+
+          if marker in source:
+              print(
+                  "Unlock button already integrated."
+              )
+
+              compile(
+                  source,
+                  "bot.py",
+                  "exec"
+              )
+
+              raise SystemExit(0)
+
+          tree = ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+          target = None
+
+          for node in ast.walk(tree):
+              if not isinstance(
+                  node,
+                  ast.Call
+              ):
+                  continue
+
+              function = node.func
+
+              if not (
+                  isinstance(
+                      function,
+                      ast.Attribute
+                  )
+                  and function.attr == "send_message"
+              ):
+                  continue
+
+              has_offer_text = any(
+                  isinstance(
+                      argument,
+                      ast.Name
+                  )
+                  and argument.id == "offer_text"
+                  for argument in node.args
+              )
+
+              if not has_offer_text:
+                  continue
+
+              for keyword in node.keywords:
+                  if keyword.arg != "reply_markup":
+                      continue
+
+                  value = keyword.value
+
+                  if not isinstance(
+                      value,
+                      ast.Call
+                  ):
+                      continue
+
+                  if not isinstance(
+                      value.func,
+                      ast.Name
+                  ):
+                      continue
+
+                  if value.func.id != "settings_menu":
+                      continue
+
+                  target = node
+                  break
+
+              if target is not None:
+                  break
+
+          if target is None:
+              raise SystemExit(
+                  "ERROR: commercial offer "
+                  "send_message was not found."
+              )
+
+          if target.end_lineno is None:
+              raise SystemExit(
+                  "ERROR: target end line unavailable."
+              )
+
+          indent = " " * target.col_offset
+
+          replacement_lines = [
+              indent
+              + "offer_actions = types.InlineKeyboardMarkup()",
+              "",
+              indent
+              + "unlock_label = (",
+              indent
+              + '    "✨ Unlock My Profile · 390 ⭐"',
+              indent
+              + '    if language == "en"',
+              indent
+              + '    else "✨ Débloquer mon Profil · 390 ⭐"',
+              indent
+              + ")",
+              "",
+              indent
+              + "offer_actions.add(",
+              indent
+              + "    types.InlineKeyboardButton(",
+              indent
+              + "        unlock_label,",
+              indent
+              + '        callback_data="unlock_profile_390"',
+              indent
+              + "    )",
+              indent
+              + ")",
+              "",
+              indent
+              + "bot.send_message(",
+              indent
+              + "    message.chat.id,",
+              indent
+              + "    offer_text,",
+              indent
+              + "    reply_markup=offer_actions",
+              indent
+              + ")",
+          ]
+
+          replacement = "\n".join(
+              replacement_lines
+          )
+
+          lines = source.splitlines(
+              keepends=True
+          )
+
+          start = target.lineno - 1
+          end = target.end_lineno
+
+          lines[
+              start:end
+          ] = [
+              replacement
+              + "\n"
+          ]
+
+          updated = "".join(
+              lines
+          )
+
+          init_marker = (
+              "# INITIALISATION"
+          )
+
+          if init_marker not in updated:
+              raise SystemExit(
+                  "ERROR: INITIALISATION marker "
+                  "was not found."
+              )
+
+          callback_block = '''
+
+          # ============================================
+          # ASTROVIBE PROFILE UNLOCK CALLBACK
+          # ============================================
+
+          @bot.callback_query_handler(
+              func=lambda call: (
+                  call.data == "unlock_profile_390"
+              )
+          )
+          def handle_profile_unlock_preview(call):
+              bot.answer_callback_query(
+                  call.id
+              )
+
+              user_id = call.from_user.id
+
+              language = get_user_language(
+                  user_id
+              )
+
+              if language == "en":
+                  text = (
+                      "⭐ Telegram Stars payment "
+                      "will be available shortly."
+                  )
+              else:
+                  text = (
+                      "⭐ Le paiement Telegram Stars "
+                      "sera disponible prochainement."
+                  )
+
+              bot.send_message(
+                  call.message.chat.id,
+                  text
+              )
+
+
+          '''
+
+          callback_block = (
+              callback_block.replace(
+                  "\n          ",
+                  "\n"
+              ).lstrip()
+          )
+
+          updated = updated.replace(
+              init_marker,
+              callback_block
+              + init_marker,
+              1,
+          )
+
+          compile(
+              updated,
+              "bot.py",
+              "exec"
+          )
+
+          checks = (
+              'callback_data="unlock_profile_390"',
+              "@bot.callback_query_handler(",
+              "handle_profile_unlock_preview",
+              "bot.answer_callback_query(",
+              marker,
+          )
+
+          for expected in checks:
+              if expected not in updated:
+                  raise SystemExit(
+                      "ERROR: missing: "
+                      + expected
+                  )
+
+          path.write_text(
+              updated,
+              encoding="utf-8"
+          )
+
+          print(
+              "390 Stars inline button integrated."
+          )
+
+          print(
+              "Original commercial call:",
+              target.lineno,
+              "-",
+              target.end_lineno
+          )
+          PY
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile personal_profile_engine.py
+          python -m py_compile personal_profile_v2_engine.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile natal_profile_interpreter.py
+          git diff --check
+
+      - name: Verify unlock integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast
+
+          source = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+          required = (
+              "InlineKeyboardMarkup",
+              "InlineKeyboardButton",
+              "unlock_profile_390",
+              "@bot.callback_query_handler(",
+              "handle_profile_unlock_preview",
+              "bot.answer_callback_query(",
+              "390 ⭐",
+          )
+
+          for expected in required:
+              if expected not in source:
+                  raise SystemExit(
+                      "ERROR: missing integration: "
+                      + expected
+                  )
+
+              print(
+                  "OK:",
+                  expected
+              )
+
+          print(
+              "390 STARS BUTTON VERIFIED"
+          )
+          PY
+
+      - name: Show bot diff
+        run: |
+          git diff --check
+          git diff -- bot.py
+
+      - name: Commit only validated bot
+        run: |
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Add safe 390 Stars profile unlock button"
+
+          git push origin HEAD:main
