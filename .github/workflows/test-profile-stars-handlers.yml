@@ -1,0 +1,162 @@
+name: Test AstroVibe Stars Handlers
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-stars-handlers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile payment modules
+        run: |
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+
+      - name: Test Stars handlers
+        run: |
+          python - <<'PY'
+          from types import SimpleNamespace
+
+          from profile_stars_handlers import (
+              PROFILE_PAYMENT_CALLBACK,
+              PROFILE_PAYMENT_PAYLOAD_PREFIX,
+              is_profile_payment_payload,
+              process_profile_pre_checkout,
+              validate_stars_handlers_configuration,
+          )
+
+          config = validate_stars_handlers_configuration()
+
+          assert config["valid"] is True
+          assert config["errors"] == []
+
+          assert (
+              PROFILE_PAYMENT_CALLBACK
+              == "unlock_profile_390"
+          )
+
+          assert (
+              PROFILE_PAYMENT_PAYLOAD_PREFIX
+              == "astrovibe_profile_v2:"
+          )
+
+          assert is_profile_payment_payload(
+              "astrovibe_profile_v2:123456789"
+          ) is True
+
+          assert is_profile_payment_payload(
+              "invalid_payload"
+          ) is False
+
+          assert is_profile_payment_payload(
+              None
+          ) is False
+
+          class FakeBot:
+              def __init__(self):
+                  self.responses = []
+
+              def answer_pre_checkout_query(
+                  self,
+                  query_id,
+                  ok,
+                  error_message=None,
+              ):
+                  self.responses.append(
+                      {
+                          "query_id": query_id,
+                          "ok": ok,
+                          "error_message": error_message,
+                      }
+                  )
+
+          bot = FakeBot()
+
+          query = SimpleNamespace(
+              id="query_123",
+              invoice_payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=390,
+              from_user=SimpleNamespace(
+                  id=123456789
+              ),
+          )
+
+          result = process_profile_pre_checkout(
+              bot,
+              query,
+          )
+
+          assert result is True
+          assert len(bot.responses) == 1
+          assert bot.responses[0]["ok"] is True
+
+          print("VALID PRE-CHECKOUT PASSED")
+
+          bad_bot = FakeBot()
+
+          bad_query = SimpleNamespace(
+              id="query_bad",
+              invoice_payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=391,
+              from_user=SimpleNamespace(
+                  id=123456789
+              ),
+          )
+
+          result = process_profile_pre_checkout(
+              bad_bot,
+              bad_query,
+          )
+
+          assert result is False
+          assert len(bad_bot.responses) == 1
+          assert bad_bot.responses[0]["ok"] is False
+
+          print("INVALID PRE-CHECKOUT REJECTED")
+          print("STARS HANDLERS TEST PASSED")
+          PY
+
+      - name: Test invoice generation
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              build_profile_invoice,
+          )
+
+          invoice = build_profile_invoice(
+              user_id=123456789,
+              language="fr",
+          )
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["provider_token"] == ""
+
+          assert invoice["payload"] == (
+              "astrovibe_profile_v2:123456789"
+          )
+
+          assert len(invoice["prices"]) == 1
+          assert invoice["prices"][0]["amount"] == 390
+
+          print("390 XTR INVOICE PASSED")
+          PY
