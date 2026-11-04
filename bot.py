@@ -3168,6 +3168,64 @@ def handle_profile_successful_payment(message):
         language,
     )
 
+
+# ============================================
+# TESTED STARS HANDLERS CONNECTION
+# ============================================
+
+@bot.pre_checkout_query_handler(
+    func=lambda query: (
+        isinstance(
+            query.invoice_payload,
+            str
+        )
+        and query.invoice_payload.startswith(
+            "astrovibe_profile_v2:"
+        )
+    )
+)
+def astro_profile_pre_checkout(query):
+    from profile_stars_handlers import (
+        process_profile_pre_checkout,
+    )
+
+    process_profile_pre_checkout(
+        bot,
+        query,
+    )
+
+
+@bot.message_handler(
+    content_types=["successful_payment"]
+)
+def astro_profile_successful_payment(message):
+    payment = message.successful_payment
+
+    if not isinstance(
+        payment.invoice_payload,
+        str,
+    ):
+        return
+
+    if not payment.invoice_payload.startswith(
+        "astrovibe_profile_v2:"
+    ):
+        return
+
+    language = get_user_language(
+        message.from_user.id
+    )
+
+    from profile_stars_handlers import (
+        process_profile_successful_payment,
+    )
+
+    process_profile_successful_payment(
+        bot,
+        message,
+        language,
+    )
+
 # INITIALISATION
 # ==================================================
 
