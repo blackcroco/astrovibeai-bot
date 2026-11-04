@@ -740,7 +740,7 @@ def format_natal_interpretation(
 
     for section in interpretation[
         "sections"
-    \]:
+    ]:
         parts.append(
             section[
                 "title"
