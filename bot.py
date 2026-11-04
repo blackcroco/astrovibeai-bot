@@ -2994,8 +2994,7 @@ def menu(message):
             reply_markup=language_menu()
         )
         
-
-    elif message.text in (
+        elif message.text in (
             "✨ Mon Profil AstroVibe",
             "✨ My AstroVibe Profile",
         ):
@@ -3025,6 +3024,11 @@ def menu(message):
                     "💎 No Premium subscription required\n\n"
                     "⭐ LAUNCH PRICE: 390 STARS"
                 )
+
+                unlock_button = (
+                    "✨ Unlock My Profile · 390 ⭐"
+                )
+
             else:
                 offer_text = (
                     "✨ TON PROFIL ASTROVIBE PERSONNEL\n\n"
@@ -3054,13 +3058,35 @@ def menu(message):
                     "⭐ PRIX DE LANCEMENT : 390 STARS"
                 )
 
-                                    bot.send_message(
-                message.chat.id,
-                offer_text,
-                reply_markup=settings_menu(
-                    language
+                unlock_button = (
+                    "✨ Débloquer mon Profil · 390 ⭐"
+                )
+
+            offer_markup = types.ReplyKeyboardMarkup(
+                resize_keyboard=True
+            )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    unlock_button
                 )
             )
+
+            offer_markup.row(
+                types.KeyboardButton(
+                    get_text(
+                        language,
+                        "back_button"
+                    )
+                )
+            )
+
+            bot.send_message(
+                message.chat.id,
+                offer_text,
+                reply_markup=offer_markup
+            )
+
 
 
 
