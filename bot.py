@@ -2995,6 +2995,72 @@ def menu(message):
         )
         
 
+    elif message.text in (
+            "✨ Mon Profil AstroVibe",
+            "✨ My AstroVibe Profile",
+        ):
+            if language == "en":
+                offer_text = (
+                    "✨ YOUR ASTROVIBE PERSONAL PROFILE\n\n"
+                    "Your Sun sign is only one part of your story. 🌌\n\n"
+                    "Discover a personalised astrological reading built "
+                    "from your birth information and natal chart.\n\n"
+                    "🔮 YOUR PROFILE EXPLORES:\n\n"
+                    "☀️ Sun — identity and self-expression\n"
+                    "🌙 Moon — emotions and deeper needs\n"
+                    "☿ Mercury — thinking and communication\n"
+                    "♀ Venus — love and values\n"
+                    "♂ Mars — energy and motivation\n"
+                    "♃ Jupiter — expansion and development\n"
+                    "♄ Saturn — responsibilities and growth\n"
+                    "♅ Uranus — freedom and change\n"
+                    "♆ Neptune — imagination and intuition\n"
+                    "♇ Pluto — transformation\n\n"
+                    "✨ IF YOUR EXACT BIRTH TIME IS KNOWN:\n\n"
+                    "⬆️ Your Ascendant\n"
+                    "🏠 Your astrological houses\n"
+                    "🪐 The life areas connected to your placements\n\n"
+                    "🌍 Available in French and English\n\n"
+                    "🔓 One-time purchase\n"
+                    "💎 No Premium subscription required\n\n"
+                    "⭐ LAUNCH PRICE: 390 STARS"
+                )
+            else:
+                offer_text = (
+                    "✨ TON PROFIL ASTROVIBE PERSONNEL\n\n"
+                    "Ton signe solaire n’est qu’une partie "
+                    "de ton histoire. 🌌\n\n"
+                    "Découvre une lecture astrologique personnalisée "
+                    "construite à partir de tes informations de naissance "
+                    "et de ton thème natal.\n\n"
+                    "🔮 TON PROFIL EXPLORE :\n\n"
+                    "☀️ Soleil — identité et expression personnelle\n"
+                    "🌙 Lune — émotions et besoins profonds\n"
+                    "☿ Mercure — pensée et communication\n"
+                    "♀ Vénus — amour et valeurs\n"
+                    "♂ Mars — énergie et motivation\n"
+                    "♃ Jupiter — expansion et développement\n"
+                    "♄ Saturne — responsabilités et construction\n"
+                    "♅ Uranus — liberté et changement\n"
+                    "♆ Neptune — imagination et intuition\n"
+                    "♇ Pluton — transformation\n\n"
+                    "✨ SI TON HEURE DE NAISSANCE EST CONNUE :\n\n"
+                    "⬆️ Ton Ascendant\n"
+                    "🏠 Tes maisons astrologiques\n"
+                    "🪐 Les domaines de vie associés à tes placements\n\n"
+                    "🌍 Disponible en français et en anglais\n\n"
+                    "🔓 Achat unique\n"
+                    "💎 Aucun abonnement Premium nécessaire\n\n"
+                    "⭐ PRIX DE LANCEMENT : 390 STARS"
+                )
+
+            bot.send_message(
+                message.chat.id,
+                offer_text,
+                reply_markup=settings_menu(
+                    language
+                )
+            )
 
     else:
         bot.send_message(
