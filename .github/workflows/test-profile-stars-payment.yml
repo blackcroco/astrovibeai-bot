@@ -1,0 +1,331 @@
+name: Test AstroVibe Profile Stars Payment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-profile-stars-payment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile payment engine
+        run: |
+          python -m py_compile profile_stars_payment.py
+
+      - name: Test configuration
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              PROFILE_PRICE_STARS,
+              PROFILE_CURRENCY,
+              PROFILE_PROVIDER_TOKEN,
+              validate_payment_configuration,
+          )
+
+          result = validate_payment_configuration()
+
+          print("Price:", PROFILE_PRICE_STARS)
+          print("Currency:", PROFILE_CURRENCY)
+          print("Provider token:", repr(PROFILE_PROVIDER_TOKEN))
+          print("Configuration:", result)
+
+          assert PROFILE_PRICE_STARS == 390
+          assert PROFILE_CURRENCY == "XTR"
+          assert PROFILE_PROVIDER_TOKEN == ""
+          assert result["valid"] is True
+          assert result["errors"] == []
+
+          print("CONFIGURATION TEST PASSED")
+          PY
+
+      - name: Test French invoice
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              build_profile_invoice,
+          )
+
+          invoice = build_profile_invoice(
+              user_id=123456789,
+              language="fr",
+          )
+
+          print(invoice)
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["provider_token"] == ""
+
+          assert invoice["payload"] == (
+              "astrovibe_profile_v2:123456789"
+          )
+
+          assert len(invoice["prices"]) == 1
+          assert invoice["prices"][0]["amount"] == 390
+
+          assert (
+              invoice["prices"][0]["label"]
+              == "Profil AstroVibe Personnel"
+          )
+
+          assert (
+              invoice["title"]
+              == "Profil AstroVibe Personnel"
+          )
+
+          print("FRENCH INVOICE TEST PASSED")
+          PY
+
+      - name: Test English invoice
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              build_profile_invoice,
+          )
+
+          invoice = build_profile_invoice(
+              user_id=123456789,
+              language="en",
+          )
+
+          print(invoice)
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["provider_token"] == ""
+
+          assert invoice["payload"] == (
+              "astrovibe_profile_v2:123456789"
+          )
+
+          assert len(invoice["prices"]) == 1
+          assert invoice["prices"][0]["amount"] == 390
+
+          assert (
+              invoice["title"]
+              == "AstroVibe Personal Profile"
+          )
+
+          print("ENGLISH INVOICE TEST PASSED")
+          PY
+
+      - name: Test payload
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              build_profile_payment_payload,
+              parse_profile_payment_payload,
+          )
+
+          payload = build_profile_payment_payload(
+              987654321
+          )
+
+          print("Payload:", payload)
+
+          assert payload == (
+              "astrovibe_profile_v2:987654321"
+          )
+
+          parsed = parse_profile_payment_payload(
+              payload
+          )
+
+          print("Parsed:", parsed)
+
+          assert parsed is not None
+
+          assert (
+              parsed["product_id"]
+              == "astrovibe_personal_profile_v2"
+          )
+
+          assert parsed["user_id"] == 987654321
+
+          assert (
+              parse_profile_payment_payload(
+                  "invalid"
+              )
+              is None
+          )
+
+          assert (
+              parse_profile_payment_payload(
+                  "astrovibe_profile_v2:not-a-number"
+              )
+              is None
+          )
+
+          print("PAYLOAD TEST PASSED")
+          PY
+
+      - name: Test valid pre-checkout
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_pre_checkout,
+          )
+
+          result = validate_profile_pre_checkout(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=390,
+              telegram_user_id=123456789,
+          )
+
+          print(result)
+
+          assert result["valid"] is True
+          assert result["reason"] is None
+          assert result["user_id"] == 123456789
+          assert result["currency"] == "XTR"
+          assert result["amount"] == 390
+
+          print("VALID PRE-CHECKOUT TEST PASSED")
+          PY
+
+      - name: Reject wrong price
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_pre_checkout,
+          )
+
+          result = validate_profile_pre_checkout(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=391,
+              telegram_user_id=123456789,
+          )
+
+          print(result)
+
+          assert result["valid"] is False
+          assert result["reason"] == "invalid_amount"
+
+          print("WRONG PRICE REJECTED")
+          PY
+
+      - name: Reject wrong currency
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_pre_checkout,
+          )
+
+          result = validate_profile_pre_checkout(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="USD",
+              total_amount=390,
+              telegram_user_id=123456789,
+          )
+
+          print(result)
+
+          assert result["valid"] is False
+          assert result["reason"] == "invalid_currency"
+
+          print("WRONG CURRENCY REJECTED")
+          PY
+
+      - name: Reject wrong user
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_pre_checkout,
+          )
+
+          result = validate_profile_pre_checkout(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=390,
+              telegram_user_id=999999999,
+          )
+
+          print(result)
+
+          assert result["valid"] is False
+          assert result["reason"] == "user_mismatch"
+
+          print("WRONG USER REJECTED")
+          PY
+
+      - name: Test successful payment validation
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_successful_payment,
+          )
+
+          result = validate_profile_successful_payment(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=390,
+              telegram_payment_charge_id=(
+                  "test_charge_123"
+              ),
+              telegram_user_id=123456789,
+          )
+
+          print(result)
+
+          assert result["valid"] is True
+
+          assert (
+              result["telegram_payment_charge_id"]
+              == "test_charge_123"
+          )
+
+          assert result["amount"] == 390
+          assert result["currency"] == "XTR"
+          assert result["user_id"] == 123456789
+
+          print(
+              "SUCCESSFUL PAYMENT VALIDATION PASSED"
+          )
+          PY
+
+      - name: Reject missing charge ID
+        run: |
+          python - <<'PY'
+          from profile_stars_payment import (
+              validate_profile_successful_payment,
+          )
+
+          result = validate_profile_successful_payment(
+              payload=(
+                  "astrovibe_profile_v2:123456789"
+              ),
+              currency="XTR",
+              total_amount=390,
+              telegram_payment_charge_id=None,
+              telegram_user_id=123456789,
+          )
+
+          print(result)
+
+          assert result["valid"] is False
+
+          assert (
+              result["reason"]
+              == "missing_payment_charge_id"
+          )
+
+          print("MISSING CHARGE ID REJECTED")
+          PY
