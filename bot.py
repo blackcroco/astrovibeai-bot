@@ -3095,39 +3095,7 @@ def menu(message):
                 types.KeyboardButton(
                     get_text(
                         language,
-                        "back_button"
-                    )
-                )
-            )
 
-            bot.send_message(
-                message.chat.id,
-                offer_text,
-                reply_markup=offer_markup
-            )
-
-        elif message.text in (
-            "✨ Débloquer mon Profil · 390 ⭐",
-            "✨ Unlock My Profile · 390 ⭐",
-        ):
-            if language == "en":
-                payment_preview = (
-                    "⭐ Telegram Stars payment "
-                    "will be available shortly."
-                )
-            else:
-                payment_preview = (
-                    "⭐ Le paiement Telegram Stars "
-                    "sera disponible prochainement."
-                )
-
-            bot.send_message(
-                message.chat.id,
-                payment_preview,
-                reply_markup=settings_menu(
-                    language
-                )
-            )
 
     else:
         bot.send_message(
