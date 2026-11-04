@@ -1,0 +1,376 @@
+name: Integrate AstroVibe Personal Profile V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-profile-v2:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Add Personal Profile V2 wrapper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "personal_profile_engine.py"
+          )
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE PERSONAL PROFILE V2"
+          )
+
+          if marker in source:
+              print(
+                  "Personal Profile V2 is already integrated."
+              )
+              raise SystemExit(0)
+
+          block = r'''
+
+# ============================================
+# ASTROVIBE PERSONAL PROFILE V2
+# Thème natal réel + profil qualitatif existant
+# ============================================
+
+from natal_chart_engine import calculate_natal_chart
+
+from natal_profile_interpreter import (
+    interpret_natal_chart,
+    format_natal_interpretation,
+)
+
+
+# Conservation du moteur V1 actuellement actif.
+_generate_personal_profile_v1 = generate_personal_profile
+
+
+def generate_personal_profile(
+    sign,
+    language="fr",
+    birth_date=None,
+    birth_time=None,
+    birth_time_known=None,
+    birth_place=None,
+    birth_timezone=None,
+    birth_latitude=None,
+    birth_longitude=None,
+):
+    language = (
+        language
+        if language in ("fr", "en")
+        else "fr"
+    )
+
+    base_profile = _generate_personal_profile_v1(
+        sign=sign,
+        language=language,
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_time_known=birth_time_known,
+        birth_place=birth_place,
+    )
+
+    # Si les données nécessaires au calcul natal
+    # ne sont pas encore disponibles, la V1 reste
+    # entièrement fonctionnelle.
+    if (
+        birth_date is None
+        or not birth_place
+        or not birth_timezone
+        or birth_latitude is None
+        or birth_longitude is None
+    ):
+        return base_profile
+
+    try:
+        natal_chart = calculate_natal_chart(
+            birth_date=birth_date,
+            birth_time=birth_time,
+            birth_time_known=birth_time_known,
+            birth_place=birth_place,
+            birth_timezone=birth_timezone,
+            birth_latitude=birth_latitude,
+            birth_longitude=birth_longitude,
+        )
+
+        if not natal_chart.get(
+            "calculated"
+        ):
+            return base_profile
+
+        natal_interpretation = interpret_natal_chart(
+            natal_chart,
+            language=language,
+        )
+
+        if not natal_interpretation.get(
+            "available"
+        ):
+            return base_profile
+
+        natal_text = format_natal_interpretation(
+            natal_interpretation,
+            language=language,
+        )
+
+        if not natal_text:
+            return base_profile
+
+        if language == "en":
+            transition = (
+                "🌌 YOUR NATAL CHART"
+            )
+        else:
+            transition = (
+                "🌌 TON THÈME NATAL"
+            )
+
+        return (
+            base_profile
+            + "\n\n"
+            + transition
+            + "\n\n"
+            + natal_text
+        )
+
+    except Exception:
+        # Le profil qualitatif V1 reste disponible
+        # même si le calcul natal rencontre un problème.
+        return base_profile
+'''
+
+          updated = (
+              source.rstrip()
+              + "\n"
+              + block
+              + "\n"
+          )
+
+          compile(
+              updated,
+              str(path),
+              "exec"
+          )
+
+          path.write_text(
+              updated,
+              encoding="utf-8"
+          )
+
+          print(
+              "Personal Profile V2 wrapper added."
+          )
+          PY
+
+      - name: Compile AstroVibe engines
+        run: |
+          python -m py_compile personal_profile_engine.py
+          python -m py_compile natal_chart_engine.py
+          python -m py_compile natal_profile_interpreter.py
+          python -m py_compile birth_location_engine.py
+          git diff --check
+
+      - name: Test French Personal Profile V2
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from personal_profile_engine import (
+              generate_personal_profile,
+          )
+
+          profile = generate_personal_profile(
+              sign="leo",
+              language="fr",
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "PROFIL ASTROVIBE PERSONNEL" in profile
+          assert "TON THÈME NATAL" in profile
+          assert "PROFIL NATAL ASTROVIBE" in profile
+          assert "Soleil" in profile
+          assert "Lune" in profile
+          assert "Mercure" in profile
+          assert "Vénus" in profile
+          assert "Mars" in profile
+          assert "Ascendant" in profile
+
+          print(
+              "French V2 length:",
+              len(profile)
+          )
+
+          print()
+          print(
+              "FRENCH PERSONAL PROFILE V2 PASSED"
+          )
+          PY
+
+      - name: Test English Personal Profile V2
+        run: |
+          python - <<'PY'
+          from datetime import date, time
+
+          from personal_profile_engine import (
+              generate_personal_profile,
+          )
+
+          profile = generate_personal_profile(
+              sign="leo",
+              language="en",
+              birth_date=date(2000, 8, 15),
+              birth_time=time(14, 35),
+              birth_time_known=True,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "ASTROVIBE PERSONAL PROFILE" in profile
+          assert "YOUR NATAL CHART" in profile
+          assert "ASTROVIBE NATAL PROFILE" in profile
+          assert "Sun" in profile
+          assert "Moon" in profile
+          assert "Mercury" in profile
+          assert "Venus" in profile
+          assert "Mars" in profile
+          assert "Ascendant" in profile
+
+          print(
+              "English V2 length:",
+              len(profile)
+          )
+
+          print()
+          print(
+              "ENGLISH PERSONAL PROFILE V2 PASSED"
+          )
+          PY
+
+      - name: Test unknown birth time V2
+        run: |
+          python - <<'PY'
+          from datetime import date
+
+          from personal_profile_engine import (
+              generate_personal_profile,
+          )
+
+          profile = generate_personal_profile(
+              sign="leo",
+              language="fr",
+              birth_date=date(2000, 8, 15),
+              birth_time=None,
+              birth_time_known=False,
+              birth_place="Vannes, FR",
+              birth_timezone="Europe/Paris",
+              birth_latitude=47.65688,
+              birth_longitude=-2.76205,
+          )
+
+          assert profile
+          assert "PROFIL ASTROVIBE PERSONNEL" in profile
+          assert "TON THÈME NATAL" in profile
+          assert "PROFIL NATAL ASTROVIBE" in profile
+
+          # Le thème natal reste disponible,
+          # mais aucun Ascendant ne doit être inventé.
+          assert "Ascendant — Expression extérieure" not in profile
+
+          assert "Soleil" in profile
+          assert "Lune" in profile
+
+          print(
+              "Unknown-time V2 length:",
+              len(profile)
+          )
+
+          print()
+          print(
+              "UNKNOWN TIME PERSONAL PROFILE V2 PASSED"
+          )
+          PY
+
+      - name: Test V1 fallback compatibility
+        run: |
+          python - <<'PY'
+          from personal_profile_engine import (
+              generate_personal_profile,
+          )
+
+          profile = generate_personal_profile(
+              sign="leo",
+              language="fr",
+          )
+
+          assert profile
+          assert "PROFIL ASTROVIBE PERSONNEL" in profile
+
+          # Sans données natales complètes,
+          # aucune analyse natale ne doit être ajoutée.
+          assert "TON THÈME NATAL" not in profile
+
+          print(
+              "V1 fallback length:",
+              len(profile)
+          )
+
+          print()
+          print(
+              "V1 FALLBACK COMPATIBILITY PASSED"
+          )
+          PY
+
+      - name: Show diff
+        run: |
+          git diff --check
+          git diff -- personal_profile_engine.py
+
+      - name: Commit validated Personal Profile V2
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add personal_profile_engine.py
+
+          git commit -m "Integrate AstroVibe Personal Profile V2"
+
+          git push origin HEAD:main
