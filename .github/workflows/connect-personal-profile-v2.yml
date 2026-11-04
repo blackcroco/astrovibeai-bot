@@ -1,4 +1,4 @@
-name: Connect AstroVibe Personal Profile V2
+name: Connect Personal Profile V2
 
 on:
   workflow_dispatch:
@@ -26,16 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Patch bot safely
+      - name: Patch bot.py safely
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("bot.py")
-
-          source = path.read_text(
-              encoding="utf-8"
-          )
+          source = path.read_text(encoding="utf-8")
 
           v2_import = (
               "from personal_profile_v2_engine import "
@@ -43,96 +41,162 @@ jobs:
           )
 
           if v2_import not in source:
-              v1_import = (
+              import_anchor = (
                   "from personal_profile_engine import "
                   "generate_personal_profile"
               )
 
-              if v1_import not in source:
-                  raise SystemExit(
-                      "ERROR: V1 profile import not found."
+              if import_anchor in source:
+                  source = source.replace(
+                      import_anchor,
+                      import_anchor
+                      + "\n"
+                      + v2_import,
+                      1,
+                  )
+              else:
+                  source = (
+                      v2_import
+                      + "\n"
+                      + source
                   )
 
-              source = source.replace(
-                  v1_import,
-                  v1_import
-                  + "\n"
-                  + v2_import,
-                  1,
+          if (
+              "profile = generate_personal_profile_v2("
+              not in source
+          ):
+              pattern = re.compile(
+                  r'(?ms)'
+                  r'^(?P<indent>[ \t]+)'
+                  r'profile\s*=\s*'
+                  r'generate_personal_profile\(\s*\n'
+                  r'.*?'
+                  r'^(?P=indent)\)'
               )
 
-          old_call = '''        profile = generate_personal_profile(
-              sign=sign,
-              language=language,
-              birth_date=birth_info["birth_date"],
-              birth_time=birth_info["birth_time"],
-              birth_time_known=birth_info["birth_time_known"],
-              birth_place=birth_info["birth_place"]
-          )'''
+              matches = list(
+                  pattern.finditer(source)
+              )
 
-          new_call = '''        profile = generate_personal_profile_v2(
-              sign=sign,
-              language=language,
-              birth_date=birth_info["birth_date"],
-              birth_time=birth_info["birth_time"],
-              birth_time_known=birth_info["birth_time_known"],
-              birth_place=birth_info["birth_place"],
-              birth_timezone=birth_info["birth_timezone"],
-              birth_latitude=birth_info["birth_latitude"],
-              birth_longitude=birth_info["birth_longitude"],
-          )'''
-
-          if new_call not in source:
-              if old_call not in source:
+              if len(matches) != 1:
                   raise SystemExit(
-                      "ERROR: send_personal_profile V1 call "
-                      "was not found exactly."
+                      "ERROR: expected exactly one "
+                      "generate_personal_profile call; "
+                      f"found {len(matches)}."
                   )
 
-              source = source.replace(
-                  old_call,
-                  new_call,
-                  1,
+              indent = matches[0].group(
+                  "indent"
               )
+
+              replacement = "\n".join(
+                  [
+                      (
+                          indent
+                          + "profile = "
+                          + "generate_personal_profile_v2("
+                      ),
+                      (
+                          indent
+                          + "    sign=sign,"
+                      ),
+                      (
+                          indent
+                          + "    language=language,"
+                      ),
+                      (
+                          indent
+                          + '    birth_date='
+                          + 'birth_info["birth_date"],'
+                      ),
+                      (
+                          indent
+                          + '    birth_time='
+                          + 'birth_info["birth_time"],'
+                      ),
+                      (
+                          indent
+                          + "    birth_time_known="
+                          + 'birth_info["birth_time_known"],'
+                      ),
+                      (
+                          indent
+                          + '    birth_place='
+                          + 'birth_info["birth_place"],'
+                      ),
+                      (
+                          indent
+                          + "    birth_timezone="
+                          + 'birth_info["birth_timezone"],'
+                      ),
+                      (
+                          indent
+                          + "    birth_latitude="
+                          + 'birth_info["birth_latitude"],'
+                      ),
+                      (
+                          indent
+                          + "    birth_longitude="
+                          + 'birth_info["birth_longitude"],'
+                      ),
+                      (
+                          indent
+                          + ")"
+                      ),
+                  ]
+              )
+
+              source, count = pattern.subn(
+                  lambda match: replacement,
+                  source,
+                  count=1,
+              )
+
+              if count != 1:
+                  raise SystemExit(
+                      "ERROR: V1 profile call "
+                      "was not replaced."
+                  )
 
           if source.count(
               "profile = generate_personal_profile_v2("
           ) != 1:
               raise SystemExit(
-                  "ERROR: expected exactly one V2 profile call."
+                  "ERROR: expected exactly one "
+                  "Telegram V2 profile call."
               )
 
-          required_values = (
+          checks = (
+              v2_import,
               'birth_info["birth_timezone"]',
               'birth_info["birth_latitude"]',
               'birth_info["birth_longitude"]',
           )
 
-          for required_value in required_values:
-              if required_value not in source:
+          for expected in checks:
+              if expected not in source:
                   raise SystemExit(
-                      "ERROR: missing value: "
-                      + required_value
+                      "ERROR: required V2 value missing: "
+                      + expected
                   )
 
           compile(
               source,
               "bot.py",
-              "exec"
+              "exec",
           )
 
           path.write_text(
               source,
-              encoding="utf-8"
+              encoding="utf-8",
           )
 
           print(
-              "Telegram Personal Profile V2 "
-              "connection applied."
+              "bot.py patched and syntax validated."
           )
           PY
 
-      - name: Compile all AstroVibe engines
+      - name: Compile AstroVibe
         run: |
           python -m py_compile bot.py
           python -m py_compile personal_profile_engine.py
@@ -142,16 +206,18 @@ jobs:
           python -m py_compile birth_location_engine.py
           git diff --check
 
-      - name: Verify bot connection
+      - name: Verify Telegram V2 connection
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          source = Path("bot.py").read_text(
+          source = Path(
+              "bot.py"
+          ).read_text(
               encoding="utf-8"
           )
 
-          checks = (
+          expected_values = (
               (
                   "V2 import",
                   "from personal_profile_v2_engine import "
@@ -175,24 +241,16 @@ jobs:
               ),
           )
 
-          for label, expected in checks:
-              if expected not in source:
-                  raise SystemExit(
-                      "ERROR: missing bot connection: "
-                      + label
-                  )
-
-              print(
-                  "OK:",
-                  label
-              )
+          for label, expected in expected_values:
+              assert expected in source, label
+              print("OK:", label)
 
           print(
-              "BOT CONNECTION TEST PASSED"
+              "TELEGRAM V2 CONNECTION PASSED"
           )
           PY
 
-      - name: Test French V2 engine
+      - name: Test French V2
         run: |
           python - <<'PY'
           from datetime import date, time
@@ -214,9 +272,15 @@ jobs:
           )
 
           assert profile
+          assert "PROFIL ASTROVIBE PERSONNEL" in profile
           assert "TON THÈME NATAL PERSONNALISÉ" in profile
+          assert "PROFIL NATAL ASTROVIBE" in profile
+
           assert "Soleil" in profile
           assert "Lune" in profile
+          assert "Mercure" in profile
+          assert "Vénus" in profile
+          assert "Mars" in profile
           assert "Ascendant" in profile
 
           print(
@@ -225,11 +289,11 @@ jobs:
           )
 
           print(
-              "FRENCH TELEGRAM V2 TEST PASSED"
+              "FRENCH V2 PASSED"
           )
           PY
 
-      - name: Test English V2 engine
+      - name: Test English V2
         run: |
           python - <<'PY'
           from datetime import date, time
@@ -251,9 +315,15 @@ jobs:
           )
 
           assert profile
+          assert "ASTROVIBE PERSONAL PROFILE" in profile
           assert "YOUR PERSONAL NATAL CHART" in profile
+          assert "ASTROVIBE NATAL PROFILE" in profile
+
           assert "Sun" in profile
           assert "Moon" in profile
+          assert "Mercury" in profile
+          assert "Venus" in profile
+          assert "Mars" in profile
           assert "Ascendant" in profile
 
           print(
@@ -262,7 +332,7 @@ jobs:
           )
 
           print(
-              "ENGLISH TELEGRAM V2 TEST PASSED"
+              "ENGLISH V2 PASSED"
           )
           PY
 
@@ -298,7 +368,7 @@ jobs:
           )
 
           print(
-              "UNKNOWN-TIME TELEGRAM V2 TEST PASSED"
+              "UNKNOWN-TIME V2 PASSED"
           )
           PY
 
@@ -307,7 +377,7 @@ jobs:
           git diff --check
           git diff -- bot.py
 
-      - name: Commit validated Telegram connection
+      - name: Commit validated Telegram V2
         run: |
           if git diff --quiet; then
             echo "No changes to commit."
