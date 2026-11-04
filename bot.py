@@ -3054,12 +3054,25 @@ def menu(message):
                     "⭐ PRIX DE LANCEMENT : 390 STARS"
                 )
 
+            offer_actions = types.InlineKeyboardMarkup()
+
+            unlock_label = (
+                "✨ Unlock My Profile · 390 ⭐"
+                if language == "en"
+                else "✨ Débloquer mon Profil · 390 ⭐"
+            )
+
+            offer_actions.add(
+                types.InlineKeyboardButton(
+                    unlock_label,
+                    callback_data="unlock_profile_390"
+                )
+            )
+
             bot.send_message(
                 message.chat.id,
                 offer_text,
-                reply_markup=settings_menu(
-                    language
-                )
+                reply_markup=offer_actions
             )
 
     else:
@@ -3075,6 +3088,43 @@ def menu(message):
 
 
 # ==================================================
+# ============================================
+# ASTROVIBE PROFILE UNLOCK CALLBACK
+# ============================================
+
+@bot.callback_query_handler(
+    func=lambda call: (
+        call.data == "unlock_profile_390"
+    )
+)
+def handle_profile_unlock_preview(call):
+    bot.answer_callback_query(
+        call.id
+    )
+
+    user_id = call.from_user.id
+
+    language = get_user_language(
+        user_id
+    )
+
+    if language == "en":
+        text = (
+  "⭐ Telegram Stars payment "
+  "will be available shortly."
+        )
+    else:
+        text = (
+  "⭐ Le paiement Telegram Stars "
+  "sera disponible prochainement."
+        )
+
+    bot.send_message(
+        call.message.chat.id,
+        text
+    )
+
+
 # INITIALISATION
 # ==================================================
 
