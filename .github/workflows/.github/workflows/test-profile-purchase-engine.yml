@@ -1,0 +1,283 @@
+name: Test AstroVibe Profile Purchase Engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-profile-purchase-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile purchase engine
+        run: |
+          python -m py_compile profile_purchase_engine.py
+
+      - name: Test purchase configuration
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              PROFILE_PRODUCT_ID,
+              PROFILE_PRICE_STARS,
+              PROFILE_CURRENCY,
+              validate_purchase_configuration,
+          )
+
+          result = validate_purchase_configuration()
+
+          print("Product:", PROFILE_PRODUCT_ID)
+          print("Price:", PROFILE_PRICE_STARS)
+          print("Currency:", PROFILE_CURRENCY)
+          print("Configuration:", result)
+
+          assert (
+              PROFILE_PRODUCT_ID
+              == "astrovibe_personal_profile_v2"
+          )
+
+          assert PROFILE_PRICE_STARS == 390
+          assert PROFILE_CURRENCY == "XTR"
+
+          assert result["valid"] is True
+          assert result["errors"] == []
+
+          print(
+              "PURCHASE CONFIGURATION PASSED"
+          )
+          PY
+
+      - name: Test user validation
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              normalize_purchase_user_id,
+          )
+
+          assert (
+              normalize_purchase_user_id(
+                  123456789
+              )
+              == 123456789
+          )
+
+          assert (
+              normalize_purchase_user_id(
+                  "123456789"
+              )
+              == 123456789
+          )
+
+          invalid_values = (
+              None,
+              "",
+              "abc",
+              0,
+              -1,
+          )
+
+          for value in invalid_values:
+              try:
+                  normalize_purchase_user_id(
+                      value
+                  )
+              except ValueError:
+                  print(
+                      "Rejected invalid user:",
+                      repr(value)
+                  )
+              else:
+                  raise AssertionError(
+                      "Invalid user was accepted"
+                  )
+
+          print(
+              "USER VALIDATION PASSED"
+          )
+          PY
+
+      - name: Test charge validation
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              normalize_charge_id,
+          )
+
+          assert (
+              normalize_charge_id(
+                  "charge_test_123"
+              )
+              == "charge_test_123"
+          )
+
+          assert (
+              normalize_charge_id(
+                  "  charge_test_123  "
+              )
+              == "charge_test_123"
+          )
+
+          invalid_values = (
+              None,
+              "",
+              "   ",
+          )
+
+          for value in invalid_values:
+              try:
+                  normalize_charge_id(
+                      value
+                  )
+              except ValueError:
+                  print(
+                      "Rejected invalid charge:",
+                      repr(value)
+                  )
+              else:
+                  raise AssertionError(
+                      "Invalid charge was accepted"
+                  )
+
+          print(
+              "CHARGE VALIDATION PASSED"
+          )
+          PY
+
+      - name: Test SQL safety markers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "profile_purchase_engine.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "CREATE TABLE IF NOT EXISTS",
+              "profile_purchases",
+              "profile_purchases_charge_unique",
+              "profile_purchases_owner_unique",
+              "profile_purchases_currency_check",
+              "ON CONFLICT DO NOTHING",
+              "RETURNING",
+              "telegram_payment_charge_id",
+              "has_purchased_profile",
+              "record_profile_purchase",
+              "get_profile_purchase",
+              "get_purchase_by_charge_id",
+          )
+
+          for item in required:
+              assert item in source, item
+
+              print(
+                  "OK:",
+                  item
+              )
+
+          print(
+              "SQL SAFETY MARKERS PASSED"
+          )
+          PY
+
+      - name: Test purchase amount rejection
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              record_profile_purchase,
+          )
+
+          class ConnectionFactory:
+              def __call__(self):
+                  raise AssertionError(
+                      "Database must not be reached "
+                      "for an invalid amount"
+                  )
+
+          try:
+              record_profile_purchase(
+                  connection_factory=(
+                      ConnectionFactory()
+                  ),
+                  user_id=123456789,
+                  telegram_payment_charge_id=(
+                      "test_invalid_amount"
+                  ),
+                  amount=391,
+                  currency="XTR",
+              )
+
+          except ValueError as error:
+              assert (
+                  str(error)
+                  == "Unexpected purchase amount"
+              )
+
+              print(
+                  "WRONG AMOUNT REJECTED"
+              )
+
+          else:
+              raise AssertionError(
+                  "Wrong amount was accepted"
+              )
+          PY
+
+      - name: Test purchase currency rejection
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              record_profile_purchase,
+          )
+
+          class ConnectionFactory:
+              def __call__(self):
+                  raise AssertionError(
+                      "Database must not be reached "
+                      "for an invalid currency"
+                  )
+
+          try:
+              record_profile_purchase(
+                  connection_factory=(
+                      ConnectionFactory()
+                  ),
+                  user_id=123456789,
+                  telegram_payment_charge_id=(
+                      "test_invalid_currency"
+                  ),
+                  amount=390,
+                  currency="USD",
+              )
+
+          except ValueError as error:
+              assert (
+                  str(error)
+                  == "Unexpected purchase currency"
+              )
+
+              print(
+                  "WRONG CURRENCY REJECTED"
+              )
+
+          else:
+              raise AssertionError(
+                  "Wrong currency was accepted"
+              )
+          PY
+
+      - name: Validate related payment engines
+        run: |
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+          python -m py_compile personal_profile_v2_engine.py
+          python -m py_compile bot.py
+          git diff --check
