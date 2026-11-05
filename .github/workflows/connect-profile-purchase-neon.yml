@@ -1,0 +1,603 @@
+name: Connect Profile Purchase To Neon
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  connect-profile-purchase-neon:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate current production
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+          python -m py_compile profile_purchase_engine.py
+
+      - name: Create purchase delivery module
+        run: |
+          cat > profile_purchase_delivery.py <<'PY'
+          # ============================================
+          # ASTROVIBE - PROFILE PURCHASE DELIVERY
+          # Telegram Stars + Neon permanent ownership
+          # ============================================
+
+          from profile_purchase_engine import (
+              has_purchased_profile,
+              record_profile_purchase,
+          )
+
+          from profile_stars_handlers import (
+              send_profile_invoice,
+              process_profile_pre_checkout,
+              is_profile_payment_payload,
+          )
+
+          from profile_stars_payment import (
+              validate_profile_successful_payment,
+              get_payment_success_text,
+              get_payment_error_text,
+          )
+
+
+          def get_already_owned_text(
+              language="fr",
+          ):
+              if language == "en":
+                  return (
+                      "✅ Your AstroVibe Personal Profile "
+                      "is already unlocked."
+                  )
+
+              return (
+                  "✅ Ton Profil AstroVibe Personnel "
+                  "est déjà débloqué."
+              )
+
+
+          def send_profile_invoice_if_not_owned(
+              bot,
+              call,
+              language,
+              connection_factory,
+          ):
+              user_id = call.from_user.id
+
+              if has_purchased_profile(
+                  connection_factory,
+                  user_id,
+              ):
+                  bot.answer_callback_query(
+                      call.id
+                  )
+
+                  bot.send_message(
+                      call.message.chat.id,
+                      get_already_owned_text(
+                          language
+                      ),
+                  )
+
+                  return {
+                      "invoice_sent": False,
+                      "already_owned": True,
+                  }
+
+              send_profile_invoice(
+                  bot,
+                  call,
+                  language,
+              )
+
+              return {
+                  "invoice_sent": True,
+                  "already_owned": False,
+              }
+
+
+          def process_profile_pre_checkout_with_ownership(
+              bot,
+              query,
+              connection_factory,
+          ):
+              if not is_profile_payment_payload(
+                  query.invoice_payload
+              ):
+                  return False
+
+              if has_purchased_profile(
+                  connection_factory,
+                  query.from_user.id,
+              ):
+                  bot.answer_pre_checkout_query(
+                      query.id,
+                      ok=False,
+                      error_message=(
+                          "This AstroVibe Profile "
+                          "is already unlocked."
+                      ),
+                  )
+
+                  return False
+
+              return process_profile_pre_checkout(
+                  bot,
+                  query,
+              )
+
+
+          def process_successful_profile_purchase(
+              bot,
+              message,
+              language,
+              connection_factory,
+          ):
+              payment = message.successful_payment
+
+              if not is_profile_payment_payload(
+                  payment.invoice_payload
+              ):
+                  return None
+
+              validation = (
+                  validate_profile_successful_payment(
+                      payload=payment.invoice_payload,
+                      currency=payment.currency,
+                      total_amount=payment.total_amount,
+                      telegram_payment_charge_id=(
+                          payment.telegram_payment_charge_id
+                      ),
+                      telegram_user_id=(
+                          message.from_user.id
+                      ),
+                  )
+              )
+
+              if not validation["valid"]:
+                  bot.send_message(
+                      message.chat.id,
+                      get_payment_error_text(
+                          language
+                      ),
+                  )
+
+                  return {
+                      "valid": False,
+                      "recorded": False,
+                      "validation": validation,
+                  }
+
+              purchase_result = record_profile_purchase(
+                  connection_factory=connection_factory,
+                  user_id=validation["user_id"],
+                  telegram_payment_charge_id=(
+                      validation[
+                          "telegram_payment_charge_id"
+                      ]
+                  ),
+                  amount=validation["amount"],
+                  currency=validation["currency"],
+              )
+
+              if (
+                  purchase_result["recorded"]
+                  or purchase_result["already_owned"]
+                  or purchase_result["duplicate_charge"]
+              ):
+                  bot.send_message(
+                      message.chat.id,
+                      get_payment_success_text(
+                          language
+                      ),
+                  )
+
+                  return {
+                      "valid": True,
+                      "recorded": purchase_result[
+                          "recorded"
+                      ],
+                      "already_owned": purchase_result[
+                          "already_owned"
+                      ],
+                      "duplicate_charge": purchase_result[
+                          "duplicate_charge"
+                      ],
+                      "purchase": purchase_result[
+                          "purchase"
+                      ],
+                  }
+
+              bot.send_message(
+                  message.chat.id,
+                  get_payment_error_text(
+                      language
+                  ),
+              )
+
+              return {
+                  "valid": True,
+                  "recorded": False,
+                  "already_owned": False,
+                  "duplicate_charge": False,
+                  "purchase": None,
+              }
+          PY
+
+      - name: Compile purchase delivery module
+        run: |
+          python -m py_compile profile_purchase_delivery.py
+
+      - name: Create safe bot patch script
+        run: |
+          cat > /tmp/connect_purchase_neon.py <<'PY'
+          from pathlib import Path
+          import ast
+
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# PROFILE PURCHASE NEON CONNECTION"
+          )
+
+          if marker in source:
+              compile(
+                  source,
+                  "bot.py",
+                  "exec"
+              )
+
+              print(
+                  "Profile purchase Neon connection "
+                  "already exists."
+              )
+
+              raise SystemExit(0)
+
+
+          tree = ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+
+          function_bodies = {
+              "handle_profile_unlock_preview": [
+                  "    language = get_user_language(",
+                  "        call.from_user.id",
+                  "    )",
+                  "",
+                  "    from profile_purchase_delivery import (",
+                  "        send_profile_invoice_if_not_owned,",
+                  "    )",
+                  "",
+                  "    send_profile_invoice_if_not_owned(",
+                  "        bot=bot,",
+                  "        call=call,",
+                  "        language=language,",
+                  "        connection_factory=get_db_connection,",
+                  "    )",
+              ],
+
+              "astro_profile_pre_checkout": [
+                  "    from profile_purchase_delivery import (",
+                  (
+                      "        "
+                      "process_profile_pre_checkout_with_ownership,"
+                  ),
+                  "    )",
+                  "",
+                  (
+                      "    "
+                      "process_profile_pre_checkout_with_ownership("
+                  ),
+                  "        bot=bot,",
+                  "        query=query,",
+                  "        connection_factory=get_db_connection,",
+                  "    )",
+              ],
+
+              "astro_profile_successful_payment": [
+                  "    payment = message.successful_payment",
+                  "",
+                  "    if not isinstance(",
+                  "        payment.invoice_payload,",
+                  "        str,",
+                  "    ):",
+                  "        return",
+                  "",
+                  "    if not payment.invoice_payload.startswith(",
+                  '        "astrovibe_profile_v2:"',
+                  "    ):",
+                  "        return",
+                  "",
+                  "    language = get_user_language(",
+                  "        message.from_user.id",
+                  "    )",
+                  "",
+                  "    from profile_purchase_delivery import (",
+                  "        process_successful_profile_purchase,",
+                  "    )",
+                  "",
+                  "    process_successful_profile_purchase(",
+                  "        bot=bot,",
+                  "        message=message,",
+                  "        language=language,",
+                  "        connection_factory=get_db_connection,",
+                  "    )",
+              ],
+          }
+
+
+          functions = {
+              node.name: node
+              for node in tree.body
+              if isinstance(
+                  node,
+                  ast.FunctionDef
+              )
+          }
+
+
+          missing = [
+              name
+              for name in function_bodies
+              if name not in functions
+          ]
+
+          if missing:
+              raise SystemExit(
+                  "ERROR: missing bot functions: "
+                  + ", ".join(missing)
+              )
+
+
+          replacements = []
+
+          for name, body_lines in function_bodies.items():
+              node = functions[name]
+
+              if not node.body:
+                  raise SystemExit(
+                      "ERROR: empty function body: "
+                      + name
+                  )
+
+              start = node.body[0].lineno - 1
+              end = node.end_lineno
+
+              if end is None:
+                  raise SystemExit(
+                      "ERROR: unavailable function end: "
+                      + name
+                  )
+
+              replacements.append(
+                  (
+                      start,
+                      end,
+                      "\n".join(body_lines)
+                      + "\n",
+                  )
+              )
+
+
+          lines = source.splitlines(
+              keepends=True
+          )
+
+
+          for start, end, replacement in sorted(
+              replacements,
+              key=lambda item: item[0],
+              reverse=True,
+          ):
+              lines[start:end] = [
+                  replacement
+              ]
+
+
+          updated = "".join(
+              lines
+          )
+
+
+          init_marker = "# INITIALISATION"
+
+          if init_marker not in updated:
+              raise SystemExit(
+                  "ERROR: INITIALISATION marker missing."
+              )
+
+
+          startup_lines = [
+              "",
+              "# ============================================",
+              "# PROFILE PURCHASE NEON CONNECTION",
+              "# ============================================",
+              "",
+              "from profile_purchase_engine import (",
+              "    init_profile_purchase_table,",
+              ")",
+              "",
+              "init_profile_purchase_table(",
+              "    get_db_connection",
+              ")",
+              "",
+              "",
+          ]
+
+
+          updated = updated.replace(
+              init_marker,
+              "\n".join(startup_lines)
+              + init_marker,
+              1,
+          )
+
+
+          compile(
+              updated,
+              "bot.py",
+              "exec"
+          )
+
+
+          required = (
+              marker,
+              "send_profile_invoice_if_not_owned",
+              (
+                  "process_profile_pre_checkout_"
+                  "with_ownership"
+              ),
+              "process_successful_profile_purchase",
+              "connection_factory=get_db_connection",
+              "init_profile_purchase_table(",
+          )
+
+
+          for item in required:
+              if item not in updated:
+                  raise SystemExit(
+                      "ERROR: missing Neon connection: "
+                      + item
+                  )
+
+
+          path.write_text(
+              updated,
+              encoding="utf-8"
+          )
+
+
+          print(
+              "Profile payment successfully "
+              "connected to Neon."
+          )
+          PY
+
+      - name: Apply bot Neon connection
+        run: |
+          python /tmp/connect_purchase_neon.py
+
+      - name: Compile patched AstroVibe
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile profile_purchase_delivery.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+          python -m py_compile personal_profile_v2_engine.py
+          git diff --check
+
+      - name: Verify purchase delivery configuration
+        run: |
+          python - <<'PY'
+          from profile_purchase_engine import (
+              validate_purchase_configuration,
+          )
+
+          from profile_stars_payment import (
+              build_profile_invoice,
+          )
+
+          result = validate_purchase_configuration()
+
+          assert result["valid"] is True
+          assert result["errors"] == []
+
+          invoice = build_profile_invoice(
+              user_id=123456789,
+              language="fr",
+          )
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["prices"][0]["amount"] == 390
+
+          print(
+              "PURCHASE DELIVERY CONFIGURATION VERIFIED"
+          )
+          PY
+
+      - name: Verify bot Neon integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast
+
+          source = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          ast.parse(
+              source,
+              filename="bot.py"
+          )
+
+          required = (
+              "PROFILE PURCHASE NEON CONNECTION",
+              "send_profile_invoice_if_not_owned",
+              (
+                  "process_profile_pre_checkout_"
+                  "with_ownership"
+              ),
+              "process_successful_profile_purchase",
+              "connection_factory=get_db_connection",
+              "init_profile_purchase_table(",
+          )
+
+          for item in required:
+              assert item in source, item
+              print("OK:", item)
+
+          print(
+              "BOT NEON PURCHASE CONNECTION VERIFIED"
+          )
+          PY
+
+      - name: Show changes
+        run: |
+          git diff --check
+          git status --short
+          git diff -- bot.py
+          git diff -- profile_purchase_delivery.py
+
+      - name: Commit validated Neon connection
+        run: |
+          git add bot.py profile_purchase_delivery.py
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Connect profile purchase to Neon"
+          git push origin HEAD:main
