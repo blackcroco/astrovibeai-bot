@@ -22,6 +22,7 @@ jobs:
       - name: Patch Premium invoice diagnostics
         run: |
           python - <<'PY'
+          import ast
           from pathlib import Path
 
           path = Path("bot.py")
@@ -29,100 +30,235 @@ jobs:
               encoding="utf-8"
           )
 
-          if "PREMIUM INVOICE DIAGNOSTIC" in source:
+          diagnostic_marker = (
+              "# PREMIUM INVOICE DIAGNOSTIC"
+          )
+
+          invoice_marker = (
+              "# PREMIUM STARS INVOICE ENTRY"
+          )
+
+          if diagnostic_marker in source:
               raise RuntimeError(
                   "Premium invoice diagnostic "
                   "already installed."
               )
 
-          start_marker = (
-              "        bot.send_invoice(\n"
-              "            chat_id=message.chat.id,"
+          marker_index = source.find(
+              invoice_marker
           )
 
-          start = source.find(start_marker)
-
-          if start == -1:
+          if marker_index == -1:
               raise RuntimeError(
-                  "Premium send_invoice block not found."
+                  "Premium invoice entry marker "
+                  "not found."
               )
 
-          end_marker = (
-              "\n        return"
+          marker_line = (
+              source[:marker_index].count("\n")
+              + 1
           )
 
-          end = source.find(
-              end_marker,
-              start,
+          tree = ast.parse(source)
+
+          target_call = None
+
+          for node in ast.walk(tree):
+              if not isinstance(node, ast.Call):
+                  continue
+
+              function = node.func
+
+              if not isinstance(
+                  function,
+                  ast.Attribute,
+              ):
+                  continue
+
+              if function.attr != "send_invoice":
+                  continue
+
+              owner = function.value
+
+              if not isinstance(owner, ast.Name):
+                  continue
+
+              if owner.id != "bot":
+                  continue
+
+              if node.lineno <= marker_line:
+                  continue
+
+              target_call = node
+              break
+
+          if target_call is None:
+              raise RuntimeError(
+                  "Premium bot.send_invoice call "
+                  "not found."
+              )
+
+          lines = source.splitlines(
+              keepends=True
           )
 
-          if end == -1:
+          statement_start = sum(
+              len(line)
+              for line in lines[
+                  :target_call.lineno - 1
+              ]
+          )
+
+          statement_end = sum(
+              len(line)
+              for line in lines[
+                  :target_call.end_lineno
+              ]
+          )
+
+          original_block = source[
+              statement_start:statement_end
+          ]
+
+          if (
+              "subscription_period"
+              not in original_block
+          ):
               raise RuntimeError(
-                  "Premium invoice return not found."
+                  "Located send_invoice call "
+                  "is not the Premium subscription."
               )
 
-          original = source[start:end]
+          first_line = lines[
+              target_call.lineno - 1
+          ]
 
-          if "subscription_period" not in original:
-              raise RuntimeError(
-                  "Target send_invoice is not "
-                  "the Premium subscription invoice."
-              )
+          indentation = (
+              first_line[
+                  :len(first_line)
+                  - len(first_line.lstrip())
+              ]
+          )
 
-          indented = "\n".join(
+          nested_block = "".join(
               "    " + line
-              for line in original.splitlines()
+              for line in original_block.splitlines(
+                  keepends=True
+              )
           )
 
           replacement = (
-              '        # PREMIUM INVOICE DIAGNOSTIC\n'
-              '        print(\n'
-              '            "PREMIUM INVOICE START",\n'
-              '            user_id,\n'
-              '            premium_invoice["currency"],\n'
-              '            premium_invoice["prices"],\n'
-              '            premium_invoice["subscription_period"],\n'
-              '            flush=True,\n'
-              '        )\n'
-              '\n'
-              '        try:\n'
-              + indented
-              + '\n'
-              '            print(\n'
-              '                "PREMIUM INVOICE SENT",\n'
-              '                flush=True,\n'
-              '            )\n'
-              '        except Exception as error:\n'
-              '            print(\n'
-              '                "PREMIUM INVOICE ERROR:",\n'
-              '                repr(error),\n'
-              '                flush=True,\n'
-              '            )\n'
-              '\n'
-              '            try:\n'
-              '                bot.send_message(\n'
-              '                    message.chat.id,\n'
-              '                    (\n'
-              '                        "⚠️ Erreur temporaire lors de "\n'
-              '                        "la création de la facture Premium."\n'
-              '                        if language != "en"\n'
-              '                        else\n'
-              '                        "⚠️ Temporary error while creating "\n'
-              '                        "the Premium invoice."\n'
-              '                    ),\n'
-              '                )\n'
-              '            except Exception as notify_error:\n'
-              '                print(\n'
-              '                    "PREMIUM DIAGNOSTIC MESSAGE ERROR:",\n'
-              '                    repr(notify_error),\n'
-              '                    flush=True,\n'
-              '                )\n'
+              indentation
+              + "# PREMIUM INVOICE DIAGNOSTIC\n"
+              + indentation
+              + "print(\n"
+              + indentation
+              + '    "PREMIUM INVOICE START",\n'
+              + indentation
+              + "    user_id,\n"
+              + indentation
+              + '    premium_invoice["currency"],\n'
+              + indentation
+              + '    premium_invoice["prices"],\n'
+              + indentation
+              + (
+                  '    premium_invoice['
+                  '"subscription_period"],\n'
+              )
+              + indentation
+              + "    flush=True,\n"
+              + indentation
+              + ")\n"
+              + "\n"
+              + indentation
+              + "try:\n"
+              + nested_block
+              + indentation
+              + "    print(\n"
+              + indentation
+              + (
+                  '        "PREMIUM INVOICE SENT",\n'
+              )
+              + indentation
+              + "        flush=True,\n"
+              + indentation
+              + "    )\n"
+              + indentation
+              + "except Exception as error:\n"
+              + indentation
+              + "    print(\n"
+              + indentation
+              + (
+                  '        "PREMIUM INVOICE ERROR:",\n'
+              )
+              + indentation
+              + "        repr(error),\n"
+              + indentation
+              + "        flush=True,\n"
+              + indentation
+              + "    )\n"
+              + "\n"
+              + indentation
+              + "    try:\n"
+              + indentation
+              + "        bot.send_message(\n"
+              + indentation
+              + "            message.chat.id,\n"
+              + indentation
+              + "            (\n"
+              + indentation
+              + (
+                  '                "⚠️ Erreur temporaire '
+                  'lors de la création "\n'
+              )
+              + indentation
+              + (
+                  '                "de la facture '
+                  'Premium."\n'
+              )
+              + indentation
+              + (
+                  '                if language != "en"\n'
+              )
+              + indentation
+              + "                else\n"
+              + indentation
+              + (
+                  '                "⚠️ Temporary error '
+                  'while creating "\n'
+              )
+              + indentation
+              + (
+                  '                "the Premium invoice."\n'
+              )
+              + indentation
+              + "            ),\n"
+              + indentation
+              + "        )\n"
+              + indentation
+              + (
+                  "    except Exception "
+                  "as notify_error:\n"
+              )
+              + indentation
+              + "        print(\n"
+              + indentation
+              + (
+                  '            "PREMIUM DIAGNOSTIC '
+                  'MESSAGE ERROR:",\n'
+              )
+              + indentation
+              + "            repr(notify_error),\n"
+              + indentation
+              + "            flush=True,\n"
+              + indentation
+              + "        )\n"
           )
 
           patched = (
-              source[:start]
+              source[:statement_start]
               + replacement
-              + source[end:]
+              + source[statement_end:]
           )
 
           path.write_text(
@@ -167,6 +303,10 @@ jobs:
           for marker in required:
               assert marker in source, marker
               print("OK:", marker)
+
+          assert source.count(
+              "# PREMIUM INVOICE DIAGNOSTIC"
+          ) == 1
 
           print("DIAGNOSTIC VERIFIED")
           PY
