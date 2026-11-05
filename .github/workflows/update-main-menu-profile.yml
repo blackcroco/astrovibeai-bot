@@ -1,0 +1,239 @@
+name: Update Main Menu With Profile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-main-menu:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Backup bot.py
+        run: cp bot.py bot.py.before-main-menu-update
+
+      - name: Patch main menu
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+          source = path.read_text(encoding="utf-8")
+
+          start_marker = 'def menu_principal(langue="fr"):'
+          end_marker = 'def menu_des_paramètres(langue="fr"):'
+
+          start = source.find(start_marker)
+          end = source.find(end_marker, start)
+
+          if start == -1:
+              raise RuntimeError(
+                  "menu_principal() introuvable. Aucun patch effectue."
+              )
+
+          if end == -1:
+              raise RuntimeError(
+                  "menu_des_parametres() introuvable. Aucun patch effectue."
+              )
+
+          old_block = source[start:end]
+
+          if "bouton_horoscope" not in old_block:
+              raise RuntimeError(
+                  "Securite: bouton horoscope absent du menu actuel."
+              )
+
+          if "bonus_button" not in old_block:
+              raise RuntimeError(
+                  "Securite: bonus_button absent du menu actuel."
+              )
+
+          if "points_button" not in old_block:
+              raise RuntimeError(
+                  "Securite: points_button absent du menu actuel."
+              )
+
+          Path(
+              "menu_principal_before_patch.txt"
+          ).write_text(
+              old_block,
+              encoding="utf-8",
+          )
+
+          new_block = '''def menu_principal(langue="fr"):
+              marge = types.ReplyKeyboardMarkup(
+                  resize_keyboard=True
+              )
+
+              marge.row(
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "bouton_horoscope")
+                  ),
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "bouton_compatibilite")
+                  )
+              )
+
+              bouton_de_profil = (
+                  "✨ My AstroVibe Profile"
+                  if langue == "en"
+                  else "✨ Mon Profil AstroVibe"
+              )
+
+              marge.row(
+                  types.KeyboardButton(
+                      bouton_de_profil
+                  ),
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "bouton_premium")
+                  )
+              )
+
+              marge.row(
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "bonus_button")
+                  ),
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "points_button")
+                  )
+              )
+
+              marge.row(
+                  types.KeyboardButton(
+                      obtenir_texte(langue, "bouton_parametres")
+                  )
+              )
+
+              return marge
+
+
+          '''
+
+          patched = (
+              source[:start]
+              + new_block
+              + source[end:]
+          )
+
+          path.write_text(
+              patched,
+              encoding="utf-8",
+          )
+
+          print("MAIN MENU PATCHED")
+          print("")
+          print("Target layout:")
+          print("Horoscope | Compatibility")
+          print("Profile   | Premium")
+          print("Bonus     | Points")
+          print("Settings")
+          PY
+
+      - name: Compile bot.py
+        run: python -m py_compile bot.py
+
+      - name: Verify new main menu
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          start = source.find(
+              'def menu_principal(langue="fr"):'
+          )
+
+          end = source.find(
+              'def menu_des_paramètres(langue="fr"):',
+              start,
+          )
+
+          assert start != -1
+          assert end != -1
+
+          menu = source[start:end]
+
+          required = (
+              "bouton_horoscope",
+              "bouton_compatibilite",
+              "✨ Mon Profil AstroVibe",
+              "✨ My AstroVibe Profile",
+              "bouton_premium",
+              "bonus_button",
+              "points_button",
+              "bouton_parametres",
+              "return marge",
+          )
+
+          for marker in required:
+              assert marker in menu, marker
+              print("OK:", marker)
+
+          print("MAIN MENU VERIFIED")
+          PY
+
+      - name: Verify profile purchase stack still present
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          bot = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "unlock_profile_390",
+              "handle_profile_unlock_preview",
+              "process_successful_profile_purchase",
+          )
+
+          for marker in required:
+              assert marker in bot, marker
+              print("OK:", marker)
+
+          print("PROFILE PURCHASE WIRING PRESERVED")
+          PY
+
+      - name: Compile profile payment stack
+        run: python -m py_compile profile_stars_payment.py profile_stars_handlers.py profile_purchase_engine.py profile_purchase_delivery.py personal_profile_v2_engine.py
+
+      - name: Show bot.py changes
+        run: git diff -- bot.py
+
+      - name: Verify only bot.py will be committed
+        run: |
+          git status --short
+          git diff --quiet -- . ':!bot.py' || {
+            echo "Unexpected tracked file changed."
+            exit 1
+          }
+
+      - name: Commit safe main menu update
+        run: |
+          rm -f bot.py.before-main-menu-update
+          rm -f menu_principal_before_patch.txt
+
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No bot.py change to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Update main menu with AstroVibe Profile"
+          git push
