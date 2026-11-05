@@ -442,6 +442,13 @@ jobs:
           print("PAYMENT STACKS PRESERVED")
           PY
 
+      - name: Remove Python cache files
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+          echo "PYTHON CACHE REMOVED"
+
       - name: Verify expected files changed
         run: |
           python - <<'PY'
