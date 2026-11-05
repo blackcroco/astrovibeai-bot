@@ -2609,11 +2609,11 @@ def menu(message):
 
             try:
                 # PREMIUM DIRECT BOT API INVOICE
+            # PREMIUM SUBSCRIPTION LINK
                 import requests
 
                 telegram_invoice_payload = {
-                    "chat_id": message.chat.id,
-                    "title": premium_invoice["title"],
+                                    "title": premium_invoice["title"],
                     "description": premium_invoice["description"],
                     "payload": premium_invoice["payload"],
                     "provider_token": "",
@@ -2623,7 +2623,7 @@ def menu(message):
                 }
 
                 telegram_response = requests.post(
-                    f"https://api.telegram.org/bot{bot.token}/sendInvoice",
+                    f"https://api.telegram.org/bot{bot.token}/createInvoiceLink",
                     json=telegram_invoice_payload,
                     timeout=20,
                 )
@@ -2648,6 +2648,56 @@ def menu(message):
                         "Telegram sendInvoice failed: "
                         + str(description)
                     )
+                invoice_link = telegram_result.get("result")
+
+                if not isinstance(
+                    invoice_link,
+                    str,
+                ) or not invoice_link:
+                    raise RuntimeError(
+                        "Telegram did not return "
+                        "a Premium invoice link"
+                    )
+
+                premium_link_markup = (
+                    types.InlineKeyboardMarkup()
+                )
+
+                premium_link_text = (
+                    "💎 Subscribe · 199 ⭐"
+                    if language == "en"
+                    else
+                    "💎 Devenir Premium · 199 ⭐"
+                )
+
+                premium_link_markup.add(
+                    types.InlineKeyboardButton(
+                        text=premium_link_text,
+                        url=invoice_link,
+                    )
+                )
+
+                premium_offer_text = (
+                    "💎 AstroVibe Premium\n\n"
+                    "199 ⭐ every 30 days.\n"
+                    "Tap the button below "
+                    "to subscribe."
+                    if language == "en"
+                    else
+                    "💎 AstroVibe Premium\n\n"
+                    "199 ⭐ tous les 30 jours.\n"
+                    "Appuie sur le bouton "
+                    "ci-dessous pour t’abonner."
+                )
+
+                bot.send_message(
+                    message.chat.id,
+                    premium_offer_text,
+                    reply_markup=(
+                        premium_link_markup
+                    ),
+                )
+
                 print(
                     "PREMIUM INVOICE SENT",
                     flush=True,
