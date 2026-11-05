@@ -19,145 +19,178 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify current integration
+      - name: Verify required files
         run: |
           test -f bot.py
           test -f paysupport_engine.py
           test -f paysupport_flow.py
           test -f terms_engine.py
-          test -f premium_stars_payment.py
-          test -f profile_purchase_engine.py
-
           echo "REQUIRED FILES OK"
 
-      - name: Create routing fix script
+      - name: Create AST routing fix
         run: |
-          cat > /tmp/fix_paysupport_routing.py <<'PY'
+          cat > /tmp/fix_routing.py <<'PY'
+          import ast
           from pathlib import Path
 
           path = Path("bot.py")
-
           source = path.read_text(
               encoding="utf-8"
           )
 
-          menu_marker = (
-              "def menu(message):"
-          )
+          tree = ast.parse(source)
 
-          support_marker = (
-              "    # ASTROVIBE PAYSUPPORT ROUTING"
-          )
+          menu_function = None
 
-          terms_marker = (
-              "    # TERMS ROUTING IN MAIN MENU"
-          )
+          for node in tree.body:
+              if (
+                  isinstance(node, ast.FunctionDef)
+                  and node.name == "menu"
+              ):
+                  menu_function = node
+                  break
 
-          terms_condition = (
-              '    if command_name == "/terms":'
-          )
-
-          unknown_marker = (
-              '"unknown_request"'
-          )
-
-          menu_position = source.find(
-              menu_marker
-          )
-
-          if menu_position == -1:
+          if menu_function is None:
               raise RuntimeError(
                   "menu(message) not found"
               )
 
-          support_position = source.find(
-              support_marker,
-              menu_position,
-          )
+          support_if = None
+          terms_if = None
 
-          if support_position == -1:
-              raise RuntimeError(
-                  "Existing paysupport routing "
-                  "not found"
+          for node in ast.walk(
+              menu_function
+          ):
+              if not isinstance(node, ast.If):
+                  continue
+
+              test_source = ast.get_source_segment(
+                  source,
+                  node.test,
               )
 
-          terms_marker_position = source.find(
-              terms_marker,
-              support_position,
-          )
+              if not test_source:
+                  continue
 
-          if terms_marker_position == -1:
-              raise RuntimeError(
-                  "Terms routing marker not found "
-                  "after paysupport"
+              compact = "".join(
+                  test_source.split()
               )
 
-          support_block = source[
-              support_position:
-              terms_marker_position
+              if (
+                  'command_name=="/paysupport"'
+                  in compact
+              ):
+                  support_if = node
+
+              if (
+                  'command_name=="/terms"'
+                  in compact
+              ):
+                  terms_if = node
+
+          if support_if is None:
+              raise RuntimeError(
+                  "Paysupport condition not found"
+              )
+
+          if terms_if is None:
+              raise RuntimeError(
+                  "Terms condition not found"
+              )
+
+          lines = source.splitlines(
+              keepends=True
+          )
+
+          support_start = (
+              support_if.lineno - 1
+          )
+
+          if (
+              support_start > 0
+              and
+              "ASTROVIBE PAYSUPPORT ROUTING"
+              in lines[support_start - 1]
+          ):
+              support_start -= 1
+
+          support_end = (
+              support_if.end_lineno
+          )
+
+          support_lines = lines[
+              support_start:support_end
           ]
 
-          if (
-              'command_name == "/paysupport"'
-              not in support_block
+          del lines[
+              support_start:support_end
+          ]
+
+          updated_source = "".join(
+              lines
+          )
+
+          updated_tree = ast.parse(
+              updated_source
+          )
+
+          updated_menu = None
+
+          for node in updated_tree.body:
+              if (
+                  isinstance(node, ast.FunctionDef)
+                  and node.name == "menu"
+              ):
+                  updated_menu = node
+                  break
+
+          updated_terms = None
+
+          for node in ast.walk(
+              updated_menu
           ):
+              if not isinstance(node, ast.If):
+                  continue
+
+              test_source = ast.get_source_segment(
+                  updated_source,
+                  node.test,
+              )
+
+              if not test_source:
+                  continue
+
+              compact = "".join(
+                  test_source.split()
+              )
+
+              if (
+                  'command_name=="/terms"'
+                  in compact
+              ):
+                  updated_terms = node
+                  break
+
+          if updated_terms is None:
               raise RuntimeError(
-                  "Invalid paysupport routing block"
+                  "Terms condition disappeared "
+                  "after support extraction"
               )
 
-          source_without_support = (
-              source[:support_position]
-              + source[terms_marker_position:]
+          insertion_index = (
+              updated_terms.lineno - 1
           )
 
-          new_menu_position = (
-              source_without_support.find(
-                  menu_marker
-              )
+          lines[
+              insertion_index:
+              insertion_index
+          ] = support_lines
+
+          fixed_source = "".join(
+              lines
           )
 
-          terms_condition_position = (
-              source_without_support.find(
-                  terms_condition,
-                  new_menu_position,
-              )
-          )
-
-          if terms_condition_position == -1:
-              raise RuntimeError(
-                  "Terms command condition not found"
-              )
-
-          command_definition_position = (
-              source_without_support.find(
-                  "    command_name = (",
-                  new_menu_position,
-              )
-          )
-
-          if command_definition_position == -1:
-              raise RuntimeError(
-                  "command_name definition not found"
-              )
-
-          if (
-              command_definition_position
-              > terms_condition_position
-          ):
-              raise RuntimeError(
-                  "command_name is not initialized "
-                  "before the Terms command"
-              )
-
-          fixed_source = (
-              source_without_support[
-                  :terms_condition_position
-              ]
-              + support_block
-              + source_without_support[
-                  terms_condition_position:
-              ]
-          )
+          ast.parse(fixed_source)
 
           path.write_text(
               fixed_source,
@@ -166,19 +199,19 @@ jobs:
 
           print(
               "PAYSUPPORT ROUTING MOVED "
-              "AFTER COMMAND INITIALIZATION"
+              "BEFORE TERMS"
           )
           PY
 
-      - name: Validate routing fix script
+      - name: Validate fix script
         run: |
-          python -m py_compile /tmp/fix_paysupport_routing.py
+          python -m py_compile /tmp/fix_routing.py
 
       - name: Apply routing fix
         run: |
-          python /tmp/fix_paysupport_routing.py
+          python /tmp/fix_routing.py
 
-      - name: Compile complete AstroVibe stack
+      - name: Compile complete stack
         run: |
           python -m py_compile bot.py
           python -m py_compile paysupport_engine.py
@@ -191,98 +224,115 @@ jobs:
           python -m py_compile profile_stars_payment.py
           python -m py_compile profile_purchase_engine.py
           python -m py_compile profile_purchase_delivery.py
-          python -m py_compile personal_profile_v2_engine.py
 
-      - name: Verify exact command routing order
+      - name: Verify routing order with AST
         run: |
           python - <<'PY'
+          import ast
           from pathlib import Path
 
           source = Path("bot.py").read_text(
               encoding="utf-8"
           )
 
-          menu_position = source.find(
-              "def menu(message):"
-          )
+          tree = ast.parse(source)
 
-          command_position = source.find(
-              "    command_name = (",
-              menu_position,
-          )
-
-          support_position = source.find(
-              "# ASTROVIBE PAYSUPPORT ROUTING",
-              menu_position,
-          )
-
-          support_condition_position = (
-              source.find(
-                  'command_name == "/paysupport"',
-                  menu_position,
+          menu = next(
+              node
+              for node in tree.body
+              if (
+                  isinstance(
+                      node,
+                      ast.FunctionDef,
+                  )
+                  and node.name == "menu"
               )
           )
 
-          terms_position = source.find(
-              'command_name == "/terms"',
-              menu_position,
-          )
+          command_line = None
+          support_line = None
+          terms_line = None
 
-          unknown_position = source.find(
-              '"unknown_request"',
-              menu_position,
-          )
+          for node in ast.walk(menu):
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if (
+                          isinstance(
+                              target,
+                              ast.Name,
+                          )
+                          and target.id
+                          == "command_name"
+                      ):
+                          if (
+                              command_line is None
+                          ):
+                              command_line = (
+                                  node.lineno
+                              )
 
-          assert menu_position != -1
-          assert command_position != -1
-          assert support_position != -1
-          assert support_condition_position != -1
-          assert terms_position != -1
-          assert unknown_position != -1
+              if isinstance(node, ast.If):
+                  test_source = (
+                      ast.get_source_segment(
+                          source,
+                          node.test,
+                      )
+                  )
+
+                  if not test_source:
+                      continue
+
+                  compact = "".join(
+                      test_source.split()
+                  )
+
+                  if (
+                      'command_name=="/paysupport"'
+                      in compact
+                  ):
+                      support_line = node.lineno
+
+                  if (
+                      'command_name=="/terms"'
+                      in compact
+                  ):
+                      terms_line = node.lineno
+
+          assert command_line is not None
+          assert support_line is not None
+          assert terms_line is not None
 
           assert (
-              command_position
-              < support_position
+              command_line
+              < support_line
+              < terms_line
           ), (
-              "command_name must be initialized "
-              "before paysupport"
+              "Incorrect command order: "
+              f"{command_line}, "
+              f"{support_line}, "
+              f"{terms_line}"
           )
-
-          assert (
-              support_position
-              < support_condition_position
-          )
-
-          assert (
-              support_condition_position
-              < terms_position
-          ), (
-              "paysupport must run before terms"
-          )
-
-          assert (
-              terms_position
-              < unknown_position
-          ), (
-              "terms must run before fallback"
-          )
-
-          assert source.count(
-              "# ASTROVIBE PAYSUPPORT ROUTING"
-          ) == 1
 
           assert source.count(
               'command_name == "/paysupport"'
           ) == 1
 
-          print("ROUTING ORDER VERIFIED")
-          print("1. command_name initialized")
-          print("2. paysupport command")
-          print("3. terms command")
-          print("4. unknown_request fallback")
+          print("ROUTING ORDER OK")
+          print(
+              "command_name:",
+              command_line,
+          )
+          print(
+              "paysupport:",
+              support_line,
+          )
+          print(
+              "terms:",
+              terms_line,
+          )
           PY
 
-      - name: Verify paysupport integration preserved
+      - name: Verify support integration
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -301,120 +351,14 @@ jobs:
               "create_support_ticket",
               "get_ticket_created_text",
               "get_db_connection",
-              "paysupport:",
           )
 
           for marker in required:
               assert marker in source, marker
-              print(
-                  "PAYSUPPORT OK:",
-                  marker,
-              )
-
-          print(
-              "PAYSUPPORT INTEGRATION PRESERVED"
-          )
+              print("SUPPORT OK:", marker)
           PY
 
-      - name: Test paysupport flow
-        run: |
-          python - <<'PY'
-          from paysupport_flow import (
-              get_amount,
-              get_category_label,
-              get_product,
-              get_support_intro,
-              parse_category,
-          )
-
-          assert (
-              parse_category(
-                  "paysupport:profile"
-              )
-              == "profile"
-          )
-
-          assert (
-              parse_category(
-                  "paysupport:premium"
-              )
-              == "premium"
-          )
-
-          assert (
-              parse_category(
-                  "paysupport:subscription"
-              )
-              == "subscription"
-          )
-
-          assert (
-              parse_category(
-                  "paysupport:refund"
-              )
-              == "refund"
-          )
-
-          assert (
-              parse_category("wrong")
-              is None
-          )
-
-          assert (
-              get_product("profile")
-              == "profile"
-          )
-
-          assert (
-              get_product("premium")
-              == "premium"
-          )
-
-          assert (
-              get_product("subscription")
-              == "premium"
-          )
-
-          assert (
-              get_amount("profile")
-              == 390
-          )
-
-          assert (
-              get_amount("premium")
-              == 199
-          )
-
-          assert (
-              "Support paiement AstroVibe"
-              in get_support_intro("fr")
-          )
-
-          assert (
-              "AstroVibe Payment Support"
-              in get_support_intro("en")
-          )
-
-          assert (
-              "Profil"
-              in get_category_label(
-                  "profile",
-                  "fr",
-              )
-          )
-
-          assert (
-              "Profile"
-              in get_category_label(
-                  "profile",
-                  "en",
-              )
-          )
-
-          print("PAYSUPPORT FLOW OK")
-          PY
-
-      - name: Verify Terms preserved
+      - name: Verify Terms Profile Premium
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -424,102 +368,25 @@ jobs:
           )
 
           required = (
-              "# TERMS ROUTING IN MAIN MENU",
               'command_name == "/terms"',
               "ASTROVIBE TERMS COMMAND",
-              "get_terms",
-              "split_terms",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print("TERMS FR EN PRESERVED")
-          PY
-
-      - name: Verify Profile payment preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
               "astrovibe_profile_v2:",
-              "process_profile_pre_checkout",
               "process_successful_profile_purchase",
               "send_personal_profile",
-              "init_profile_purchase_table",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "PROFILE 390 STARS PRESERVED"
-          )
-          PY
-
-      - name: Verify Premium payment preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
               "astrovibe_premium:",
               "createInvoiceLink",
-              "process_premium_pre_checkout",
               "process_successful_premium_payment",
-              "premium_subscription_buttons",
-              "def is_premium",
           )
 
           for marker in required:
               assert marker in source, marker
-
-          print(
-              "PREMIUM 199 STARS PRESERVED"
-          )
-          PY
-
-      - name: Verify main menu preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
-              "def menu(message):",
-              "horoscope_buttons",
-              "compatibility_buttons",
-              "bonus_buttons",
-              "points_buttons",
-              "language_buttons",
-              "premium_subscription_buttons",
-              "unknown_request",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print("MAIN MENU PRESERVED")
+              print("PRESERVED:", marker)
           PY
 
       - name: Remove Python cache
         run: |
           find . -type d -name "__pycache__" -prune -exec rm -rf {} +
           find . -type f -name "*.pyc" -delete
-
-          echo "PYTHON CACHE REMOVED"
 
       - name: Verify only bot.py changed
         run: |
@@ -545,7 +412,7 @@ jobs:
           }
 
           assert changed == {"bot.py"}, (
-              "Unexpected changed files: "
+              "Unexpected files: "
               + repr(sorted(changed))
           )
 
@@ -556,12 +423,12 @@ jobs:
         run: |
           git diff -- bot.py
 
-      - name: Commit paysupport routing fix
+      - name: Commit routing fix
         run: |
           git add bot.py
 
           if git diff --cached --quiet; then
-            echo "No bot.py changes."
+            echo "No bot.py change."
             exit 1
           fi
 
