@@ -53,19 +53,18 @@ jobs:
               "def menu(message):"
           )
 
-          if function_marker not in source:
+          function_position = source.find(
+              function_marker
+          )
+
+          if function_position == -1:
               raise RuntimeError(
-                  "Main menu(message) router "
-                  "not found."
+                  "menu(message) router not found."
               )
 
           language_marker = (
               "    language = "
               "get_user_language(user_id)"
-          )
-
-          function_position = source.find(
-              function_marker
           )
 
           language_position = source.find(
@@ -84,48 +83,54 @@ jobs:
               + len(language_marker)
           )
 
-          routing_block = '''
+          routing_lines = [
+              "",
+              "",
+              "    # TERMS ROUTING IN MAIN MENU",
+              "    message_text = (",
+              "        message.text.strip()",
+              "        if isinstance(",
+              "            message.text,",
+              "            str,",
+              "        )",
+              "        else \"\"",
+              "    )",
+              "",
+              "    command_name = (",
+              "        message_text.split()[0]",
+              "        if message_text",
+              "        else \"\"",
+              "    )",
+              "",
+              "    command_name = (",
+              "        command_name.split(\"@\")[0]",
+              "    )",
+              "",
+              "    if command_name == \"/terms\":",
+              "        from terms_engine import (",
+              "            get_terms,",
+              "            split_terms,",
+              "        )",
+              "",
+              "        terms_text = get_terms(",
+              "            language",
+              "        )",
+              "",
+              "        for part in split_terms(",
+              "            terms_text",
+              "        ):",
+              "            bot.send_message(",
+              "                message.chat.id,",
+              "                part,",
+              "            )",
+              "",
+              "        return",
+              "",
+          ]
 
-    # TERMS ROUTING IN MAIN MENU
-    message_text = (
-        message.text.strip()
-        if isinstance(
-            message.text,
-            str,
-        )
-        else ""
-    )
-
-    command_name = (
-        message_text.split()[0]
-        if message_text
-        else ""
-    )
-
-    command_name = (
-        command_name.split("@")[0]
-    )
-
-    if command_name == "/terms":
-        from terms_engine import (
-            get_terms,
-            split_terms,
-        )
-
-        terms_text = get_terms(
-            language
-        )
-
-        for part in split_terms(
-            terms_text
-        ):
-            bot.send_message(
-                message.chat.id,
-                part,
-            )
-
-        return
-'''
+          routing_block = "\n".join(
+              routing_lines
+          )
 
           source = (
               source[:insertion_position]
@@ -138,9 +143,7 @@ jobs:
               encoding="utf-8",
           )
 
-          print(
-              "TERMS ROUTING PATCHED"
-          )
+          print("TERMS ROUTING PATCHED")
           PY
 
       - name: Compile AstroVibe
@@ -154,7 +157,7 @@ jobs:
           python -m py_compile profile_stars_payment.py
           python -m py_compile profile_purchase_engine.py
 
-      - name: Test Terms engine FR EN
+      - name: Test Terms FR EN
         run: |
           python - <<'PY'
           from terms_engine import (
@@ -165,15 +168,8 @@ jobs:
           fr = get_terms("fr")
           en = get_terms("en")
 
-          assert (
-              "Conditions d’utilisation"
-              in fr
-          )
-
-          assert (
-              "Terms of Use"
-              in en
-          )
+          assert "Conditions d’utilisation" in fr
+          assert "Terms of Use" in en
 
           assert "390 ⭐" in fr
           assert "199 ⭐" in fr
@@ -183,18 +179,28 @@ jobs:
           assert "/paysupport" in fr
           assert "/paysupport" in en
 
-          for part in split_terms(fr):
-              assert len(part) <= 3900
+          fr_parts = split_terms(fr)
+          en_parts = split_terms(en)
 
-          for part in split_terms(en):
-              assert len(part) <= 3900
+          assert fr_parts
+          assert en_parts
+
+          assert all(
+              len(part) <= 3900
+              for part in fr_parts
+          )
+
+          assert all(
+              len(part) <= 3900
+              for part in en_parts
+          )
 
           print("FR TERMS OK")
           print("EN TERMS OK")
           print("TERMS SPLITTING OK")
           PY
 
-      - name: Verify Terms routing
+      - name: Verify Terms routing before fallback
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -209,11 +215,6 @@ jobs:
 
           assert menu_start != -1
 
-          unknown_position = source.find(
-              '"unknown_request"',
-              menu_start,
-          )
-
           terms_position = source.find(
               "# TERMS ROUTING IN MAIN MENU",
               menu_start,
@@ -221,21 +222,16 @@ jobs:
 
           assert terms_position != -1
 
+          unknown_position = source.find(
+              '"unknown_request"',
+              menu_start,
+          )
+
           assert unknown_position != -1
 
           assert (
               terms_position
               < unknown_position
-          ), (
-              "Terms routing must execute "
-              "before unknown_request"
-          )
-
-          required = (
-              'command_name == "/terms"',
-              "get_terms",
-              "split_terms",
-              "return",
           )
 
           router = source[
@@ -243,19 +239,24 @@ jobs:
               unknown_position
           ]
 
+          required = (
+              'command_name == "/terms"',
+              "get_terms",
+              "split_terms",
+              "bot.send_message",
+              "return",
+          )
+
           for marker in required:
               assert marker in router, marker
-              print(
-                  "ROUTING OK:",
-                  marker,
-              )
+              print("ROUTING OK:", marker)
 
           print(
               "TERMS EXECUTES BEFORE FALLBACK"
           )
           PY
 
-      - name: Verify existing Terms handler preserved
+      - name: Verify existing Terms integration
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -272,13 +273,14 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
+              print("TERMS OK:", marker)
 
           print(
-              "EXISTING TERMS INTEGRATION PRESERVED"
+              "TERMS INTEGRATION PRESERVED"
           )
           PY
 
-      - name: Verify Profile payment preserved
+      - name: Verify Profile preserved
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -296,10 +298,7 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-              print(
-                  "PROFILE OK:",
-                  marker,
-              )
+              print("PROFILE OK:", marker)
 
           print(
               "PROFILE 390 STARS PRESERVED"
@@ -326,17 +325,14 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-              print(
-                  "PREMIUM OK:",
-                  marker,
-              )
+              print("PREMIUM OK:", marker)
 
           print(
               "PREMIUM 199 STARS PRESERVED"
           )
           PY
 
-      - name: Verify main menu systems preserved
+      - name: Verify main router preserved
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -346,6 +342,7 @@ jobs:
           )
 
           required = (
+              "def menu(message):",
               "horoscope_buttons",
               "compatibility_buttons",
               "bonus_buttons",
@@ -357,14 +354,9 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-              print(
-                  "MENU OK:",
-                  marker,
-              )
+              print("MENU OK:", marker)
 
-          print(
-              "MAIN ROUTER PRESERVED"
-          )
+          print("MAIN ROUTER PRESERVED")
           PY
 
       - name: Remove Python cache
@@ -397,16 +389,12 @@ jobs:
               if line.strip()
           }
 
-          assert changed == {
-              "bot.py"
-          }, (
+          assert changed == {"bot.py"}, (
               "Unexpected changed files: "
               + repr(sorted(changed))
           )
 
-          print(
-              "ONLY BOT.PY CHANGED"
-          )
+          print("ONLY BOT.PY CHANGED")
           PY
 
       - name: Show bot.py changes
