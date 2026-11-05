@@ -2597,16 +2597,56 @@ def menu(message):
                 for item in premium_invoice["prices"]
             ]
 
-            bot.send_invoice(
-                chat_id=message.chat.id,
-                title=premium_invoice["title"],
-                description=premium_invoice["description"],
-                invoice_payload=premium_invoice["payload"],
-                provider_token="",
-                currency=premium_invoice["currency"],
-                prices=premium_prices,
-                subscription_period=premium_invoice["subscription_period"],
+            # PREMIUM INVOICE DIAGNOSTIC
+            print(
+                "PREMIUM INVOICE START",
+                user_id,
+                premium_invoice["currency"],
+                premium_invoice["prices"],
+                premium_invoice["subscription_period"],
+                flush=True,
             )
+
+            try:
+                bot.send_invoice(
+                    chat_id=message.chat.id,
+                    title=premium_invoice["title"],
+                    description=premium_invoice["description"],
+                    invoice_payload=premium_invoice["payload"],
+                    provider_token="",
+                    currency=premium_invoice["currency"],
+                    prices=premium_prices,
+                    subscription_period=premium_invoice["subscription_period"],
+                )
+                print(
+                    "PREMIUM INVOICE SENT",
+                    flush=True,
+                )
+            except Exception as error:
+                print(
+                    "PREMIUM INVOICE ERROR:",
+                    repr(error),
+                    flush=True,
+                )
+
+                try:
+                    bot.send_message(
+                        message.chat.id,
+                        (
+                            "⚠️ Erreur temporaire lors de la création "
+                            "de la facture Premium."
+                            if language != "en"
+                            else
+                            "⚠️ Temporary error while creating "
+                            "the Premium invoice."
+                        ),
+                    )
+                except Exception as notify_error:
+                    print(
+                        "PREMIUM DIAGNOSTIC MESSAGE ERROR:",
+                        repr(notify_error),
+                        flush=True,
+                    )
 
             return
 
