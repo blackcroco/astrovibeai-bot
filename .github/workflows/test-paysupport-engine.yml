@@ -1,0 +1,1079 @@
+name: Test Payment Support Engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-paysupport-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile payment support engine
+        run: |
+          python -m py_compile paysupport_engine.py
+
+      - name: Verify support configuration
+        run: |
+          python - <<'PY'
+          from paysupport_engine import (
+              SUPPORTED_LANGUAGES,
+              SUPPORTED_CATEGORIES,
+              SUPPORTED_PRODUCTS,
+              SUPPORTED_STATUSES,
+              generate_ticket_code,
+          )
+
+          assert SUPPORTED_LANGUAGES == {
+              "fr",
+              "en",
+          }
+
+          assert {
+              "profile",
+              "premium",
+              "payment",
+              "subscription",
+              "refund",
+              "other",
+          } == SUPPORTED_CATEGORIES
+
+          assert SUPPORTED_PRODUCTS == {
+              "profile",
+              "premium",
+          }
+
+          assert {
+              "open",
+              "ai_processing",
+              "waiting_user",
+              "escalated",
+              "resolved",
+              "closed",
+          } == SUPPORTED_STATUSES
+
+          code = generate_ticket_code()
+
+          assert code.startswith("AV-")
+          assert len(code) == 9
+
+          print("SUPPORT CONFIGURATION OK")
+          print("TICKET CODE FORMAT OK:", code)
+          PY
+
+      - name: Test complete support ticket lifecycle
+        run: |
+          python - <<'PY'
+          from datetime import (
+              datetime,
+              timezone,
+          )
+
+          import paysupport_engine as engine
+
+
+          class FakeDatabase:
+              def __init__(self):
+                  self.tickets = []
+                  self.next_id = 1
+
+
+          class FakeConnection:
+              def __init__(self, database):
+                  self.database = database
+                  self.commits = 0
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def cursor(self):
+                  return FakeCursor(
+                      self.database
+                  )
+
+              def commit(self):
+                  self.commits += 1
+
+
+          class FakeCursor:
+              def __init__(self, database):
+                  self.database = database
+                  self.result = None
+                  self.rowcount = 0
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def _ticket_row(self, ticket):
+                  return (
+                      ticket["id"],
+                      ticket["ticket_code"],
+                      ticket["user_id"],
+                      ticket["language"],
+                      ticket["category"],
+                      ticket["product"],
+                      ticket["status"],
+                      ticket["user_message"],
+                      ticket["ai_summary"],
+                      ticket["ai_resolution"],
+                      ticket[
+                          "escalated_to_human"
+                      ],
+                      ticket["admin_reply"],
+                      ticket[
+                          "payment_amount_stars"
+                      ],
+                      ticket[
+                          "telegram_payment_charge_id"
+                      ],
+                      ticket["created_at"],
+                      ticket["updated_at"],
+                      ticket["resolved_at"],
+                  )
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  normalized = " ".join(
+                      query.split()
+                  ).lower()
+
+                  params = params or ()
+                  self.result = None
+                  self.rowcount = 0
+
+                  if (
+                      "insert into support_tickets"
+                      in normalized
+                  ):
+                      (
+                          ticket_code,
+                          user_id,
+                          language,
+                          category,
+                          product,
+                          status,
+                          user_message,
+                          escalated_to_human,
+                          payment_amount_stars,
+                          charge_id,
+                          created_at,
+                          updated_at,
+                      ) = params
+
+                      if any(
+                          ticket["ticket_code"]
+                          == ticket_code
+                          for ticket
+                          in self.database.tickets
+                      ):
+                          raise RuntimeError(
+                              "duplicate unique "
+                              "ticket_code"
+                          )
+
+                      ticket = {
+                          "id": self.database.next_id,
+                          "ticket_code": ticket_code,
+                          "user_id": user_id,
+                          "language": language,
+                          "category": category,
+                          "product": product,
+                          "status": status,
+                          "user_message": (
+                              user_message
+                          ),
+                          "ai_summary": None,
+                          "ai_resolution": None,
+                          "escalated_to_human": (
+                              escalated_to_human
+                          ),
+                          "admin_reply": None,
+                          "payment_amount_stars": (
+                              payment_amount_stars
+                          ),
+                          "telegram_payment_charge_id": (
+                              charge_id
+                          ),
+                          "created_at": created_at,
+                          "updated_at": updated_at,
+                          "resolved_at": None,
+                      }
+
+                      self.database.next_id += 1
+
+                      self.database.tickets.append(
+                          ticket
+                      )
+
+                      self.result = (
+                          self._ticket_row(
+                              ticket
+                          )
+                      )
+
+                      self.rowcount = 1
+                      return
+
+                  if (
+                      "select"
+                      in normalized
+                      and
+                      "from support_tickets"
+                      in normalized
+                      and
+                      "where ticket_code = %s"
+                      in normalized
+                  ):
+                      ticket_code = params[0]
+
+                      ticket = next(
+                          (
+                              item
+                              for item
+                              in self.database.tickets
+                              if item["ticket_code"]
+                              == ticket_code
+                          ),
+                          None,
+                      )
+
+                      if ticket is not None:
+                          self.result = (
+                              self._ticket_row(
+                                  ticket
+                              )
+                          )
+                          self.rowcount = 1
+
+                      return
+
+                  if (
+                      "select"
+                      in normalized
+                      and
+                      "from support_tickets"
+                      in normalized
+                      and
+                      "where user_id = %s"
+                      in normalized
+                  ):
+                      user_id = params[0]
+
+                      tickets = [
+                          item
+                          for item
+                          in self.database.tickets
+                          if item["user_id"]
+                          == user_id
+                      ]
+
+                      if (
+                          "status in"
+                          in normalized
+                      ):
+                          allowed = {
+                              "open",
+                              "ai_processing",
+                              "waiting_user",
+                              "escalated",
+                          }
+
+                          tickets = [
+                              item
+                              for item in tickets
+                              if item["status"]
+                              in allowed
+                          ]
+
+                      tickets.sort(
+                          key=lambda item: (
+                              item["created_at"],
+                              item["id"],
+                          ),
+                          reverse=True,
+                      )
+
+                      if tickets:
+                          self.result = (
+                              self._ticket_row(
+                                  tickets[0]
+                              )
+                          )
+                          self.rowcount = 1
+
+                      return
+
+                  if (
+                      "update support_tickets"
+                      in normalized
+                      and
+                      "ai_summary = %s"
+                      in normalized
+                      and
+                      "ai_resolution = %s"
+                      in normalized
+                  ):
+                      (
+                          summary,
+                          resolution,
+                          status,
+                          updated_at,
+                          resolved_at,
+                          ticket_code,
+                      ) = params
+
+                      ticket = next(
+                          (
+                              item
+                              for item
+                              in self.database.tickets
+                              if item["ticket_code"]
+                              == ticket_code
+                          ),
+                          None,
+                      )
+
+                      if ticket is not None:
+                          ticket["ai_summary"] = (
+                              summary
+                          )
+                          ticket["ai_resolution"] = (
+                              resolution
+                          )
+                          ticket["status"] = status
+                          ticket["updated_at"] = (
+                              updated_at
+                          )
+                          ticket["resolved_at"] = (
+                              resolved_at
+                          )
+                          self.rowcount = 1
+
+                      return
+
+                  if (
+                      "update support_tickets"
+                      in normalized
+                      and
+                      "escalated_to_human = true"
+                      in normalized
+                  ):
+                      (
+                          summary,
+                          updated_at,
+                          ticket_code,
+                      ) = params
+
+                      ticket = next(
+                          (
+                              item
+                              for item
+                              in self.database.tickets
+                              if item["ticket_code"]
+                              == ticket_code
+                          ),
+                          None,
+                      )
+
+                      if ticket is not None:
+                          ticket["status"] = (
+                              "escalated"
+                          )
+
+                          ticket[
+                              "escalated_to_human"
+                          ] = True
+
+                          if summary is not None:
+                              ticket[
+                                  "ai_summary"
+                              ] = summary
+
+                          ticket["updated_at"] = (
+                              updated_at
+                          )
+
+                          self.rowcount = 1
+
+                      return
+
+                  if (
+                      "update support_tickets"
+                      in normalized
+                      and
+                      "admin_reply = %s"
+                      in normalized
+                  ):
+                      (
+                          reply,
+                          status,
+                          updated_at,
+                          resolved_at,
+                          ticket_code,
+                      ) = params
+
+                      ticket = next(
+                          (
+                              item
+                              for item
+                              in self.database.tickets
+                              if item["ticket_code"]
+                              == ticket_code
+                          ),
+                          None,
+                      )
+
+                      if ticket is not None:
+                          ticket["admin_reply"] = (
+                              reply
+                          )
+                          ticket["status"] = status
+                          ticket["updated_at"] = (
+                              updated_at
+                          )
+                          ticket["resolved_at"] = (
+                              resolved_at
+                          )
+                          self.rowcount = 1
+
+                      return
+
+                  if (
+                      "update support_tickets"
+                      in normalized
+                      and
+                      "resolved_at = %s"
+                      in normalized
+                      and
+                      "admin_reply"
+                      not in normalized
+                      and
+                      "ai_summary"
+                      not in normalized
+                  ):
+                      (
+                          status,
+                          updated_at,
+                          resolved_at,
+                          ticket_code,
+                      ) = params
+
+                      ticket = next(
+                          (
+                              item
+                              for item
+                              in self.database.tickets
+                              if item["ticket_code"]
+                              == ticket_code
+                          ),
+                          None,
+                      )
+
+                      if ticket is not None:
+                          ticket["status"] = status
+                          ticket["updated_at"] = (
+                              updated_at
+                          )
+                          ticket["resolved_at"] = (
+                              resolved_at
+                          )
+                          self.rowcount = 1
+
+                      return
+
+                  raise AssertionError(
+                      "Unexpected SQL query: "
+                      + normalized
+                  )
+
+              def fetchone(self):
+                  return self.result
+
+
+          database = FakeDatabase()
+
+
+          def get_fake_db_connection():
+              return FakeConnection(
+                  database
+              )
+
+
+          engine.generate_ticket_code = (
+              lambda: "AV-A1B2C3"
+          )
+
+          ticket = engine.create_support_ticket(
+              get_db_connection=(
+                  get_fake_db_connection
+              ),
+              user_id=123456789,
+              user_message=(
+                  "Mon paiement Premium a été "
+                  "débité mais mon statut reste "
+                  "Gratuit."
+              ),
+              language="fr",
+              category="premium",
+              product="premium",
+              payment_amount_stars=199,
+              telegram_payment_charge_id=(
+                  "TEST_SUPPORT_CHARGE_001"
+              ),
+          )
+
+          assert ticket is not None
+          assert ticket["id"] == 1
+
+          assert (
+              ticket["ticket_code"]
+              == "AV-A1B2C3"
+          )
+
+          assert ticket["user_id"] == 123456789
+          assert ticket["language"] == "fr"
+          assert ticket["category"] == "premium"
+          assert ticket["product"] == "premium"
+          assert ticket["status"] == "open"
+
+          assert (
+              ticket["payment_amount_stars"]
+              == 199
+          )
+
+          assert (
+              ticket[
+                  "telegram_payment_charge_id"
+              ]
+              == "TEST_SUPPORT_CHARGE_001"
+          )
+
+          assert (
+              ticket["escalated_to_human"]
+              is False
+          )
+
+          assert isinstance(
+              ticket["created_at"],
+              datetime,
+          )
+
+          assert (
+              ticket["created_at"].tzinfo
+              is not None
+          )
+
+          print("CREATE TICKET OK")
+
+          loaded = engine.get_support_ticket(
+              get_fake_db_connection,
+              "av-a1b2c3",
+          )
+
+          assert loaded is not None
+
+          assert (
+              loaded["ticket_code"]
+              == "AV-A1B2C3"
+          )
+
+          print("GET TICKET BY CODE OK")
+
+          latest = (
+              engine.get_latest_user_ticket(
+                  get_fake_db_connection,
+                  123456789,
+              )
+          )
+
+          assert latest is not None
+
+          assert (
+              latest["ticket_code"]
+              == "AV-A1B2C3"
+          )
+
+          print("LATEST USER TICKET OK")
+
+          open_ticket = (
+              engine.get_open_user_ticket(
+                  get_fake_db_connection,
+                  123456789,
+              )
+          )
+
+          assert open_ticket is not None
+
+          assert (
+              open_ticket["status"]
+              == "open"
+          )
+
+          print("OPEN USER TICKET OK")
+
+          ai_saved = engine.save_ai_analysis(
+              get_fake_db_connection,
+              "AV-A1B2C3",
+              ai_summary=(
+                  "Le paiement Premium semble "
+                  "avoir été effectué mais "
+                  "l’accès n’est pas actif."
+              ),
+              ai_resolution=(
+                  "Vérification humaine requise."
+              ),
+              status="waiting_user",
+          )
+
+          assert ai_saved is True
+
+          analyzed = engine.get_support_ticket(
+              get_fake_db_connection,
+              "AV-A1B2C3",
+          )
+
+          assert (
+              analyzed["status"]
+              == "waiting_user"
+          )
+
+          assert (
+              analyzed["ai_summary"]
+              is not None
+          )
+
+          assert (
+              analyzed["ai_resolution"]
+              == "Vérification humaine requise."
+          )
+
+          print("AI ANALYSIS SIMULATION OK")
+
+          escalated = engine.escalate_ticket(
+              get_fake_db_connection,
+              "AV-A1B2C3",
+              ai_summary=(
+                  "Le problème n’a pas pu être "
+                  "résolu automatiquement."
+              ),
+          )
+
+          assert escalated is True
+
+          human_ticket = (
+              engine.get_support_ticket(
+                  get_fake_db_connection,
+                  "AV-A1B2C3",
+              )
+          )
+
+          assert (
+              human_ticket["status"]
+              == "escalated"
+          )
+
+          assert (
+              human_ticket[
+                  "escalated_to_human"
+              ]
+              is True
+          )
+
+          print("HUMAN ESCALATION OK")
+
+          reply_saved = engine.save_admin_reply(
+              get_fake_db_connection,
+              "AV-A1B2C3",
+              admin_reply=(
+                  "Ton accès Premium a été "
+                  "vérifié par le support."
+              ),
+              resolve=True,
+          )
+
+          assert reply_saved is True
+
+          resolved = engine.get_support_ticket(
+              get_fake_db_connection,
+              "AV-A1B2C3",
+          )
+
+          assert (
+              resolved["status"]
+              == "resolved"
+          )
+
+          assert (
+              resolved["admin_reply"]
+              == (
+                  "Ton accès Premium a été "
+                  "vérifié par le support."
+              )
+          )
+
+          assert resolved["resolved_at"] is not None
+
+          print("ADMIN REPLY OK")
+          print("TICKET RESOLUTION OK")
+
+          no_open_ticket = (
+              engine.get_open_user_ticket(
+                  get_fake_db_connection,
+                  123456789,
+              )
+          )
+
+          assert no_open_ticket is None
+
+          print("RESOLVED TICKET NO LONGER OPEN")
+          print("COMPLETE SUPPORT LIFECYCLE PASSED")
+          PY
+
+      - name: Test French and English support messages
+        run: |
+          python - <<'PY'
+          from paysupport_engine import (
+              get_ticket_created_text,
+              get_ticket_escalated_text,
+          )
+
+          ticket_fr = {
+              "ticket_code": "AV-ABC123",
+              "language": "fr",
+          }
+
+          ticket_en = {
+              "ticket_code": "AV-DEF456",
+              "language": "en",
+          }
+
+          created_fr = (
+              get_ticket_created_text(
+                  ticket_fr
+              )
+          )
+
+          created_en = (
+              get_ticket_created_text(
+                  ticket_en
+              )
+          )
+
+          escalated_fr = (
+              get_ticket_escalated_text(
+                  ticket_fr
+              )
+          )
+
+          escalated_en = (
+              get_ticket_escalated_text(
+                  ticket_en
+              )
+          )
+
+          assert "AV-ABC123" in created_fr
+          assert "Ta demande" in created_fr
+
+          assert "AV-DEF456" in created_en
+          assert "Your support request" in created_en
+
+          assert "support AstroVibe" in escalated_fr
+          assert "AstroVibe support" in escalated_en
+
+          assert (
+              "compte Telegram personnel"
+              in escalated_fr
+          )
+
+          assert (
+              "personal Telegram account"
+              in escalated_en
+          )
+
+          print("FRENCH SUPPORT TEXT OK")
+          print("ENGLISH SUPPORT TEXT OK")
+          PY
+
+      - name: Test ticket status updates
+        run: |
+          python - <<'PY'
+          import paysupport_engine as engine
+
+
+          class StatusCursor:
+              def __init__(self):
+                  self.rowcount = 0
+                  self.params = None
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  self.params = params
+                  self.rowcount = 1
+
+
+          class StatusConnection:
+              def __init__(self):
+                  self.cursor_instance = (
+                      StatusCursor()
+                  )
+                  self.committed = False
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def cursor(self):
+                  return self.cursor_instance
+
+              def commit(self):
+                  self.committed = True
+
+
+          connections = []
+
+
+          def get_connection():
+              connection = StatusConnection()
+              connections.append(connection)
+              return connection
+
+
+          result = engine.update_ticket_status(
+              get_connection,
+              "av-status1",
+              "ai_processing",
+          )
+
+          assert result is True
+          assert connections[-1].committed is True
+
+          params = (
+              connections[-1]
+              .cursor_instance
+              .params
+          )
+
+          assert params[0] == "ai_processing"
+          assert params[2] is None
+          assert params[3] == "AV-STATUS1"
+
+          result = engine.update_ticket_status(
+              get_connection,
+              "AV-STATUS1",
+              "closed",
+          )
+
+          assert result is True
+
+          params = (
+              connections[-1]
+              .cursor_instance
+              .params
+          )
+
+          assert params[0] == "closed"
+          assert params[2] is not None
+
+          print("STATUS UPDATE OK")
+          print("CLOSED DATE OK")
+          PY
+
+      - name: Test invalid support data protection
+        run: |
+          python - <<'PY'
+          import paysupport_engine as engine
+
+
+          def unused_connection():
+              raise AssertionError(
+                  "Database must not be called "
+                  "for invalid input"
+              )
+
+
+          invalid_cases = [
+              {
+                  "user_id": 123,
+                  "user_message": "Test",
+                  "language": "de",
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "Test",
+                  "category": "unknown",
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "Test",
+                  "product": "unknown",
+              },
+              {
+                  "user_id": 0,
+                  "user_message": "Test",
+              },
+              {
+                  "user_id": "invalid",
+                  "user_message": "Test",
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "",
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "   ",
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "Test",
+                  "payment_amount_stars": -1,
+              },
+              {
+                  "user_id": 123,
+                  "user_message": "Test",
+                  "payment_amount_stars": (
+                      "invalid"
+                  ),
+              },
+          ]
+
+          for case in invalid_cases:
+              try:
+                  engine.create_support_ticket(
+                      get_db_connection=(
+                          unused_connection
+                      ),
+                      **case,
+                  )
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError(
+                      "Invalid support data accepted: "
+                      + repr(case)
+                  )
+
+          try:
+              engine.update_ticket_status(
+                  unused_connection,
+                  "AV-TEST",
+                  "invalid_status",
+              )
+          except ValueError:
+              pass
+          else:
+              raise AssertionError(
+                  "Invalid status accepted"
+              )
+
+          try:
+              engine.save_ai_analysis(
+                  unused_connection,
+                  "AV-TEST",
+                  ai_summary="Summary",
+                  status="closed",
+              )
+          except ValueError:
+              pass
+          else:
+              raise AssertionError(
+                  "Invalid AI status accepted"
+              )
+
+          print("INVALID SUPPORT DATA REJECTED")
+          PY
+
+      - name: Verify payment systems remain separate
+        run: |
+          test -f paysupport_engine.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f profile_stars_payment.py
+          test -f terms_engine.py
+          test -f bot.py
+
+          echo "PAYMENT SUPPORT ENGINE EXISTS"
+          echo "PREMIUM STACK PRESERVED"
+          echo "PROFILE STACK PRESERVED"
+          echo "TERMS ENGINE PRESERVED"
+          echo "BOT.PY PRESERVED"
+
+      - name: Verify no repository file changed
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final zero impact validation
+        run: |
+          echo "======================================="
+          echo "PAYMENT SUPPORT ENGINE TEST PASSED"
+          echo "======================================="
+          echo "Ticket creation: OK"
+          echo "Ticket retrieval: OK"
+          echo "Open ticket lookup: OK"
+          echo "French support text: OK"
+          echo "English support text: OK"
+          echo "AI analysis simulation: OK"
+          echo "Human escalation simulation: OK"
+          echo "Admin reply simulation: OK"
+          echo "Ticket resolution: OK"
+          echo "Invalid data protection: OK"
+          echo "Premium payment stack preserved: OK"
+          echo "Profile payment stack preserved: OK"
+          echo "Real database writes: 0"
+          echo "Real Telegram messages: 0"
+          echo "Real AI requests: 0"
