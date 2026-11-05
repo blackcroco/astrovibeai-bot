@@ -31,9 +31,10 @@ jobs:
 
           echo "REQUIRED FILES OK"
 
-      - name: Patch Premium subscription invoice link
+      - name: Patch Premium subscription link
         run: |
           python - <<'PY'
+          import ast
           from pathlib import Path
 
           path = Path("bot.py")
@@ -80,8 +81,8 @@ jobs:
 
           if source.count(old_endpoint) != 1:
               raise RuntimeError(
-                  "Expected exactly one direct "
-                  "Premium sendInvoice endpoint."
+                  "Expected exactly one Premium "
+                  "sendInvoice endpoint."
               )
 
           source = source.replace(
@@ -90,21 +91,30 @@ jobs:
               1,
           )
 
-          chat_id_line = (
-              '    "chat_id": message.chat.id,\n'
+          chat_id_variants = (
+              '    "chat_id": message.chat.id,\n',
+              '                "chat_id": message.chat.id,\n',
+              '                    "chat_id": message.chat.id,\n',
           )
 
-          if chat_id_line not in source:
+          chat_id_removed = False
+
+          for chat_id_line in chat_id_variants:
+              if chat_id_line in source:
+                  source = source.replace(
+                      chat_id_line,
+                      "",
+                      1,
+                  )
+
+                  chat_id_removed = True
+                  break
+
+          if not chat_id_removed:
               raise RuntimeError(
-                  "Premium invoice chat_id line "
+                  "Premium invoice chat_id field "
                   "not found."
               )
-
-          source = source.replace(
-              chat_id_line,
-              "",
-              1,
-          )
 
           direct_marker = (
               "# PREMIUM DIRECT BOT API INVOICE"
@@ -116,79 +126,274 @@ jobs:
                   direct_marker
                   + "\n"
                   + "            "
-                  + "# PREMIUM SUBSCRIPTION LINK"
+                  + patch_marker
               ),
               1,
           )
 
-          sent_marker = (
-              '            print(\n'
-              '                "PREMIUM INVOICE SENT",\n'
-          )
+          tree = ast.parse(source)
 
-          if sent_marker not in source:
+          success_print = None
+
+          for node in ast.walk(tree):
+              if not isinstance(
+                  node,
+                  ast.Expr,
+              ):
+                  continue
+
+              call = node.value
+
+              if not isinstance(
+                  call,
+                  ast.Call,
+              ):
+                  continue
+
+              if not isinstance(
+                  call.func,
+                  ast.Name,
+              ):
+                  continue
+
+              if call.func.id != "print":
+                  continue
+
+              found_success_text = False
+
+              for argument in call.args:
+                  if (
+                      isinstance(
+                          argument,
+                          ast.Constant,
+                      )
+                      and argument.value
+                      == "PREMIUM INVOICE SENT"
+                  ):
+                      found_success_text = True
+                      break
+
+              if found_success_text:
+                  success_print = node
+                  break
+
+          if success_print is None:
               raise RuntimeError(
-                  "Premium invoice success marker "
-                  "not found."
+                  "PREMIUM INVOICE SENT print "
+                  "not found through Python AST."
               )
 
-          send_link_code = (
-              '            invoice_link = '
-              'telegram_result.get("result")\n'
-              '\n'
-              '            if not isinstance(\n'
-              '                invoice_link,\n'
-              '                str,\n'
-              '            ) or not invoice_link:\n'
-              '                raise RuntimeError(\n'
-              '                    "Telegram did not return "\n'
-              '                    "a Premium invoice link"\n'
-              '                )\n'
-              '\n'
-              '            premium_link_markup = (\n'
-              '                types.InlineKeyboardMarkup()\n'
-              '            )\n'
-              '\n'
-              '            premium_link_text = (\n'
-              '                "💎 Subscribe · 199 ⭐"\n'
-              '                if language == "en"\n'
-              '                else\n'
-              '                "💎 Devenir Premium · 199 ⭐"\n'
-              '            )\n'
-              '\n'
-              '            premium_link_markup.add(\n'
-              '                types.InlineKeyboardButton(\n'
-              '                    text=premium_link_text,\n'
-              '                    url=invoice_link,\n'
-              '                )\n'
-              '            )\n'
-              '\n'
-              '            premium_offer_text = (\n'
-              '                "💎 AstroVibe Premium\\n\\n"\n'
-              '                "199 ⭐ every 30 days.\\n"\n'
-              '                "Tap the button below to subscribe."\n'
-              '                if language == "en"\n'
-              '                else\n'
-              '                "💎 AstroVibe Premium\\n\\n"\n'
-              '                "199 ⭐ tous les 30 jours.\\n"\n'
-              '                "Appuie sur le bouton ci-dessous "\n'
-              '                "pour t’abonner."\n'
-              '            )\n'
-              '\n'
-              '            bot.send_message(\n'
-              '                message.chat.id,\n'
-              '                premium_offer_text,\n'
-              '                reply_markup=(\n'
-              '                    premium_link_markup\n'
-              '                ),\n'
-              '            )\n'
-              '\n'
+          lines = source.splitlines(
+              keepends=True
           )
 
-          source = source.replace(
-              sent_marker,
-              send_link_code + sent_marker,
-              1,
+          insertion_index = sum(
+              len(line)
+              for line in lines[
+                  :success_print.lineno - 1
+              ]
+          )
+
+          success_line = lines[
+              success_print.lineno - 1
+          ]
+
+          indentation = success_line[
+              :len(success_line)
+              - len(success_line.lstrip())
+          ]
+
+          link_code_lines = [
+              (
+                  indentation
+                  + "invoice_link = "
+                  + 'telegram_result.get("result")\n'
+              ),
+              "\n",
+              (
+                  indentation
+                  + "if not isinstance(\n"
+              ),
+              (
+                  indentation
+                  + "    invoice_link,\n"
+              ),
+              (
+                  indentation
+                  + "    str,\n"
+              ),
+              (
+                  indentation
+                  + ") or not invoice_link:\n"
+              ),
+              (
+                  indentation
+                  + "    raise RuntimeError(\n"
+              ),
+              (
+                  indentation
+                  + '        "Telegram did not return "\n'
+              ),
+              (
+                  indentation
+                  + '        "a Premium invoice link"\n'
+              ),
+              (
+                  indentation
+                  + "    )\n"
+              ),
+              "\n",
+              (
+                  indentation
+                  + "premium_link_markup = (\n"
+              ),
+              (
+                  indentation
+                  + "    types.InlineKeyboardMarkup()\n"
+              ),
+              (
+                  indentation
+                  + ")\n"
+              ),
+              "\n",
+              (
+                  indentation
+                  + "premium_link_text = (\n"
+              ),
+              (
+                  indentation
+                  + '    "💎 Subscribe · 199 ⭐"\n'
+              ),
+              (
+                  indentation
+                  + '    if language == "en"\n'
+              ),
+              (
+                  indentation
+                  + "    else\n"
+              ),
+              (
+                  indentation
+                  + '    "💎 Devenir Premium · 199 ⭐"\n'
+              ),
+              (
+                  indentation
+                  + ")\n"
+              ),
+              "\n",
+              (
+                  indentation
+                  + "premium_link_markup.add(\n"
+              ),
+              (
+                  indentation
+                  + "    types.InlineKeyboardButton(\n"
+              ),
+              (
+                  indentation
+                  + "        text=premium_link_text,\n"
+              ),
+              (
+                  indentation
+                  + "        url=invoice_link,\n"
+              ),
+              (
+                  indentation
+                  + "    )\n"
+              ),
+              (
+                  indentation
+                  + ")\n"
+              ),
+              "\n",
+              (
+                  indentation
+                  + "premium_offer_text = (\n"
+              ),
+              (
+                  indentation
+                  + '    "💎 AstroVibe Premium\\n\\n"\n'
+              ),
+              (
+                  indentation
+                  + '    "199 ⭐ every 30 days.\\n"\n'
+              ),
+              (
+                  indentation
+                  + '    "Tap the button below "\n'
+              ),
+              (
+                  indentation
+                  + '    "to subscribe."\n'
+              ),
+              (
+                  indentation
+                  + '    if language == "en"\n'
+              ),
+              (
+                  indentation
+                  + "    else\n"
+              ),
+              (
+                  indentation
+                  + '    "💎 AstroVibe Premium\\n\\n"\n'
+              ),
+              (
+                  indentation
+                  + '    "199 ⭐ tous les 30 jours.\\n"\n'
+              ),
+              (
+                  indentation
+                  + '    "Appuie sur le bouton "\n'
+              ),
+              (
+                  indentation
+                  + '    "ci-dessous pour t’abonner."\n'
+              ),
+              (
+                  indentation
+                  + ")\n"
+              ),
+              "\n",
+              (
+                  indentation
+                  + "bot.send_message(\n"
+              ),
+              (
+                  indentation
+                  + "    message.chat.id,\n"
+              ),
+              (
+                  indentation
+                  + "    premium_offer_text,\n"
+              ),
+              (
+                  indentation
+                  + "    reply_markup=(\n"
+              ),
+              (
+                  indentation
+                  + "        premium_link_markup\n"
+              ),
+              (
+                  indentation
+                  + "    ),\n"
+              ),
+              (
+                  indentation
+                  + ")\n"
+              ),
+              "\n",
+          ]
+
+          link_code = "".join(
+              link_code_lines
+          )
+
+          source = (
+              source[:insertion_index]
+              + link_code
+              + source[insertion_index:]
           )
 
           path.write_text(
@@ -240,7 +445,10 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-              print("LINK OK:", marker)
+              print(
+                  "SUBSCRIPTION LINK OK:",
+                  marker,
+              )
 
           assert (
               'bot{bot.token}/sendInvoice'
@@ -253,6 +461,33 @@ jobs:
 
           print(
               "PREMIUM SUBSCRIPTION LINK VERIFIED"
+          )
+          PY
+
+      - name: Verify createInvoiceLink payload
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              '"title"',
+              '"description"',
+              '"payload"',
+              '"provider_token": ""',
+              '"currency"',
+              '"prices"',
+              '"subscription_period"',
+          )
+
+          for marker in required:
+              assert marker in source, marker
+
+          print(
+              "CREATE INVOICE LINK PAYLOAD OK"
           )
           PY
 
