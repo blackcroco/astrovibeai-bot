@@ -2608,16 +2608,46 @@ def menu(message):
             )
 
             try:
-                bot.send_invoice(
-                    chat_id=message.chat.id,
-                    title=premium_invoice["title"],
-                    description=premium_invoice["description"],
-                    invoice_payload=premium_invoice["payload"],
-                    provider_token="",
-                    currency=premium_invoice["currency"],
-                    prices=premium_prices,
-                    subscription_period=premium_invoice["subscription_period"],
+                # PREMIUM DIRECT BOT API INVOICE
+                import requests
+
+                telegram_invoice_payload = {
+                    "chat_id": message.chat.id,
+                    "title": premium_invoice["title"],
+                    "description": premium_invoice["description"],
+                    "payload": premium_invoice["payload"],
+                    "provider_token": "",
+                    "currency": premium_invoice["currency"],
+                    "prices": premium_invoice["prices"],
+                    "subscription_period": premium_invoice["subscription_period"],
+                }
+
+                telegram_response = requests.post(
+                    f"https://api.telegram.org/bot{bot.token}/sendInvoice",
+                    json=telegram_invoice_payload,
+                    timeout=20,
                 )
+
+                try:
+                    telegram_result = telegram_response.json()
+                except ValueError as error:
+                    raise RuntimeError(
+                        "Telegram returned an invalid response"
+                    ) from error
+
+                if (
+                    not telegram_response.ok
+                    or not telegram_result.get("ok")
+                ):
+                    description = telegram_result.get(
+                        "description",
+                        "unknown Telegram error",
+                    )
+
+                    raise RuntimeError(
+                        "Telegram sendInvoice failed: "
+                        + str(description)
+                    )
                 print(
                     "PREMIUM INVOICE SENT",
                     flush=True,
