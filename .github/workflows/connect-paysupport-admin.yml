@@ -80,7 +80,7 @@ jobs:
                   )
 
           # ==========================================
-          # 1. ADMIN /supportreply ROUTING
+          # ADMIN /supportreply ROUTING
           # ==========================================
 
           menu_position = source.find(
@@ -142,7 +142,7 @@ jobs:
           )
 
           # ==========================================
-          # 2. REAL HUMAN ESCALATION AFTER TICKET
+          # HUMAN ESCALATION AFTER TICKET CREATION
           # ==========================================
 
           ticket_function_position = source.find(
@@ -290,7 +290,6 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-
               print(
                   "ADMIN ROUTING OK:",
                   marker,
@@ -306,10 +305,33 @@ jobs:
           )
 
           paysupport_position = source.find(
-              ' fallback_position != -1
+              'command_name == "/paysupport"',
+              menu_position,
+          )
+
+          terms_position = source.find(
+              'command_name == "/terms"',
+              menu_position,
+          )
+
+          fallback_marker = (
+              '"unknown_request"'
+          )
+
+          fallback_position = source.find(
+              fallback_marker,
+              menu_position,
+          )
+
+          assert menu_position != -1
+          assert admin_position != -1
+          assert paysupport_position != -1
+          assert terms_position != -1
+          assert fallback_position != -1
 
           assert (
-              admin_position
+              menu_position
+              < admin_position
               < paysupport_position
               < terms_position
               < fallback_position
@@ -317,6 +339,10 @@ jobs:
 
           assert source.count(
               "# ASTROVIBE SUPPORT ADMIN ROUTING"
+          ) == 1
+
+          assert source.count(
+              'command_name == "/supportreply"'
           ) == 1
 
           print(
@@ -345,7 +371,6 @@ jobs:
 
           for marker in required:
               assert marker in source, marker
-
               print(
                   "ESCALATION OK:",
                   marker,
@@ -355,9 +380,14 @@ jobs:
               "def create_paysupport_ticket("
           )
 
+          ticket_creation = source.find(
+              "ticket = create_support_ticket(",
+              ticket_function,
+          )
+
           escalation_position = source.find(
               "# ASTROVIBE SUPPORT HUMAN ESCALATION",
-              ticket_function,
+              ticket_creation,
           )
 
           confirmation_position = source.find(
@@ -366,11 +396,13 @@ jobs:
           )
 
           assert ticket_function != -1
+          assert ticket_creation != -1
           assert escalation_position != -1
           assert confirmation_position != -1
 
           assert (
               ticket_function
+              < ticket_creation
               < escalation_position
               < confirmation_position
           )
@@ -420,6 +452,11 @@ jobs:
           assert (
               parsed["ticket_code"]
               == "AV-B0DC89"
+          )
+
+          assert (
+              parsed["reply"]
+              == "Réponse support de test."
           )
 
           ticket = {
@@ -476,16 +513,6 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
-              "astrovibe_profile_v2:",
-              "process_profile_pre_checkout",
-              "process_successful_profile_purchase",
-              "send_personal_profile",
-              "init_profile_purchase_table",
           )
 
           for marker in required:
