@@ -1949,7 +1949,45 @@ def menu(message):
     user_id = message.from_user.id
     language = get_user_language(user_id)
 
-    # TERMS ROUTING IN MAIN MENU
+        # ASTROVIBE PAYSUPPORT ROUTING
+    if command_name == "/paysupport":
+        from paysupport_flow import (
+            get_category_label,
+            get_support_intro,
+        )
+
+        markup = types.InlineKeyboardMarkup()
+
+        for category in (
+            "profile",
+            "premium",
+            "payment",
+            "subscription",
+            "refund",
+            "other",
+        ):
+            markup.add(
+                types.InlineKeyboardButton(
+                    text=get_category_label(
+                        category,
+                        language,
+                    ),
+                    callback_data=(
+                        "paysupport:"
+                        + category
+                    ),
+                )
+            )
+
+        bot.send_message(
+            message.chat.id,
+            get_support_intro(language),
+            reply_markup=markup,
+        )
+
+        return
+
+# TERMS ROUTING IN MAIN MENU
     message_text = (
         message.text.strip()
         if isinstance(
@@ -3612,6 +3650,115 @@ def handle_terms_command(message):
         bot.send_message(
             message.chat.id,
             part,
+        )
+
+
+
+# ASTROVIBE PAYSUPPORT CALLBACK
+@bot.callback_query_handler(
+    func=lambda call: (
+        isinstance(call.data, str)
+        and call.data.startswith(
+            "paysupport:"
+        )
+    )
+)
+def handle_paysupport_category(call):
+    from paysupport_flow import (
+        get_prompt,
+        parse_category,
+    )
+
+    category = parse_category(
+        call.data
+    )
+
+    if not category:
+        bot.answer_callback_query(
+            call.id
+        )
+        return
+
+    language = get_user_language(
+        call.from_user.id
+    )
+
+    bot.answer_callback_query(
+        call.id
+    )
+
+    request = bot.send_message(
+        call.message.chat.id,
+        get_prompt(
+            category,
+            language,
+        ),
+    )
+
+    bot.register_next_step_handler(
+        request,
+        create_paysupport_ticket,
+        category,
+        language,
+    )
+
+
+def create_paysupport_ticket(
+    message,
+    category,
+    language,
+):
+    from paysupport_engine import (
+        create_support_ticket,
+        get_ticket_created_text,
+    )
+
+    from paysupport_flow import (
+        get_amount,
+        get_product,
+    )
+
+    if not isinstance(
+        message.text,
+        str,
+    ):
+        return
+
+    text = message.text.strip()
+
+    if not text:
+        return
+
+    try:
+        ticket = create_support_ticket(
+            get_db_connection,
+            message.from_user.id,
+            text,
+            language=language,
+            category=category,
+            product=get_product(
+                category
+            ),
+            payment_amount_stars=(
+                get_amount(category)
+            ),
+        )
+
+        bot.send_message(
+            message.chat.id,
+            get_ticket_created_text(
+                ticket
+            ),
+            reply_markup=main_menu(
+                language
+            ),
+        )
+
+    except Exception as error:
+        print(
+            "PAYSUPPORT ERROR:",
+            repr(error),
+            flush=True,
         )
 
 
