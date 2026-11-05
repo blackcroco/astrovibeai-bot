@@ -29,7 +29,6 @@ jobs:
           python -m py_compile profile_purchase_delivery.py
           python -m py_compile personal_profile_v2_engine.py
           python -m py_compile bot.py
-
       - name: Test invoice to successful payment flow
         run: |
           python - <<'PY'
