@@ -2580,6 +2580,36 @@ def menu(message):
         )
     elif message.text in premium_subscription_buttons:
         premium_active = is_premium(user_id)
+        # PREMIUM STARS INVOICE ENTRY
+        if not premium_active:
+            from premium_stars_payment import build_premium_invoice
+
+            premium_invoice = build_premium_invoice(
+                user_id=user_id,
+                language=language,
+            )
+
+            premium_prices = [
+                types.LabeledPrice(
+                    label=item["label"],
+                    amount=item["amount"],
+                )
+                for item in premium_invoice["prices"]
+            ]
+
+            bot.send_invoice(
+                chat_id=message.chat.id,
+                title=premium_invoice["title"],
+                description=premium_invoice["description"],
+                invoice_payload=premium_invoice["payload"],
+                provider_token="",
+                currency=premium_invoice["currency"],
+                prices=premium_prices,
+                subscription_period=premium_invoice["subscription_period"],
+            )
+
+            return
+
 
         if premium_active:
             status_text = get_text(
@@ -3187,6 +3217,72 @@ def handle_profile_pre_checkout(query):
 def handle_profile_successful_payment(message):
     payment = message.successful_payment
 
+    if (
+        isinstance(
+            payment.invoice_payload,
+            str,
+        )
+        and payment.invoice_payload.startswith(
+            "astrovibe_premium:"
+        )
+    ):
+        from premium_stars_handlers import process_successful_premium_payment
+
+        result = process_successful_premium_payment(
+            get_db_connection=get_db_connection,
+            payload=payment.invoice_payload,
+            currency=payment.currency,
+            total_amount=payment.total_amount,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            telegram_user_id=message.from_user.id,
+            telegram_subscription_id=None,
+            subscription_expiration_date=getattr(
+                payment,
+                "subscription_expiration_date",
+                None,
+            ),
+            is_recurring=getattr(
+                payment,
+                "is_recurring",
+                None,
+            ),
+            is_first_recurring=getattr(
+                payment,
+                "is_first_recurring",
+                None,
+            ),
+        )
+
+        language = get_user_language(
+            message.from_user.id
+        )
+
+        if result["success"]:
+            text = (
+                "💎 AstroVibe Premium is active!"
+                if language == "en"
+                else "💎 AstroVibe Premium est actif !"
+            )
+
+            bot.send_message(
+                message.chat.id,
+                text,
+                reply_markup=premium_menu(language),
+            )
+        else:
+            reason = result.get(
+                "reason",
+                "unknown_error",
+            )
+
+            bot.send_message(
+                message.chat.id,
+                f"Premium payment error: {reason}",
+            )
+
+        return
+
+
     if not isinstance(
         payment.invoice_payload,
         str,
@@ -3287,6 +3383,46 @@ def astro_profile_successful_payment(message):
 
 
 # ============================================
+# ==================================================
+# PREMIUM STARS PAYMENT CONNECTION
+# ==================================================
+
+@bot.pre_checkout_query_handler(
+    func=lambda query: (
+        isinstance(
+            query.invoice_payload,
+            str,
+        )
+        and query.invoice_payload.startswith(
+            "astrovibe_premium:"
+        )
+    )
+)
+def astro_premium_pre_checkout(query):
+    from premium_stars_handlers import process_premium_pre_checkout
+
+    result = process_premium_pre_checkout(
+        payload=query.invoice_payload,
+        currency=query.currency,
+        total_amount=query.total_amount,
+        telegram_user_id=query.from_user.id,
+    )
+
+    if result["success"]:
+        bot.answer_pre_checkout_query(
+            query.id,
+            ok=True,
+        )
+    else:
+        bot.answer_pre_checkout_query(
+            query.id,
+            ok=False,
+            error_message=(
+                "Invalid Premium payment"
+            ),
+        )
+
+
 # PROFILE PURCHASE NEON CONNECTION
 # ============================================
 
