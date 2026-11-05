@@ -1,0 +1,737 @@
+name: Connect Premium Stars Payment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  connect-premium-stars-payment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify clean starting point
+        run: |
+          git diff --quiet
+          git diff --cached --quiet
+
+          test -f bot.py
+          test -f premium_engine.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+          test -f profile_stars_payment.py
+          test -f profile_stars_handlers.py
+          test -f profile_purchase_delivery.py
+          test -f profile_purchase_engine.py
+
+          echo "CLEAN STARTING POINT OK"
+
+      - name: Verify pyTelegramBotAPI subscription support
+        run: |
+          python - <<'PY'
+          import inspect
+          import telebot
+
+          signature = inspect.signature(
+              telebot.TeleBot.send_invoice
+          )
+
+          parameters = signature.parameters
+
+          assert "subscription_period" in parameters, (
+              "Installed pyTelegramBotAPI does not expose "
+              "subscription_period in TeleBot.send_invoice"
+          )
+
+          print(
+              "SEND_INVOICE SUBSCRIPTION SUPPORT OK"
+          )
+          PY
+
+      - name: Patch Premium invoice entry and handlers
+        run: |
+          python - <<'PY'
+          import ast
+          import re
+          from pathlib import Path
+
+          path = Path("bot.py")
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          premium_marker = (
+              "# PREMIUM STARS PAYMENT CONNECTION"
+          )
+
+          if premium_marker in source:
+              raise RuntimeError(
+                  "Premium Stars connection already exists. "
+                  "No patch applied."
+              )
+
+          required_before_patch = (
+              "premium_subscription_buttons",
+              "premium_active = is_premium(user_id)",
+              "def handle_profile_successful_payment",
+              "payment = message.successful_payment",
+              '"astrovibe_profile_v2:"',
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "def is_premium",
+          )
+
+          for marker in required_before_patch:
+              if marker not in source:
+                  raise RuntimeError(
+                      "Required bot.py marker missing: "
+                      + marker
+                  )
+
+          # ------------------------------------------
+          # 1. RACCORDER LE BOUTON MON ABONNEMENT
+          # ------------------------------------------
+
+          subscription_pattern = re.compile(
+              r'(?P<indent>[ \t]*)'
+              r'elif message\.text in '
+              r'premium_subscription_buttons:\s*\n'
+              r'(?P=indent)[ \t]+'
+              r'premium_active = is_premium$$user_id$$',
+              flags=re.MULTILINE,
+          )
+
+          subscription_match = (
+              subscription_pattern.search(source)
+          )
+
+          if subscription_match is None:
+              raise RuntimeError(
+                  "Premium subscription branch not found."
+              )
+
+          branch_indent = (
+              subscription_match.group("indent")
+          )
+
+          body_indent = branch_indent + "    "
+
+          invoice_code = f'''
+{body_indent}# PREMIUM STARS INVOICE ENTRY
+{body_indent}if not premium_active:
+{body_indent}    from premium_stars_payment import (
+{body_indent}        build_premium_invoice,
+{body_indent}    )
+
+{body_indent}    premium_invoice = (
+{body_indent}        build_premium_invoice(
+{body_indent}            user_id=user_id,
+{body_indent}            language=language,
+{body_indent}        )
+{body_indent}    )
+
+{body_indent}    premium_prices = [
+{body_indent}        types.LabeledPrice(
+{body_indent}            label=item["label"],
+{body_indent}            amount=item["amount"],
+{body_indent}        )
+{body_indent}        for item
+{body_indent}        in premium_invoice["prices"]
+{body_indent}    ]
+
+{body_indent}    bot.send_invoice(
+{body_indent}        chat_id=message.chat.id,
+{body_indent}        title=premium_invoice["title"],
+{body_indent}        description=(
+{body_indent}            premium_invoice["description"]
+{body_indent}        ),
+{body_indent}        invoice_payload=(
+{body_indent}            premium_invoice["payload"]
+{body_indent}        ),
+{body_indent}        provider_token="",
+{body_indent}        currency=(
+{body_indent}            premium_invoice["currency"]
+{body_indent}        ),
+{body_indent}        prices=premium_prices,
+{body_indent}        subscription_period=(
+{body_indent}            premium_invoice[
+{body_indent}                "subscription_period"
+{body_indent}            ]
+{body_indent}        ),
+{body_indent}    )
+
+{body_indent}    return
+'''
+
+          subscription_end = (
+              subscription_match.end()
+          )
+
+          source = (
+              source[:subscription_end]
+              + invoice_code
+              + source[subscription_end:]
+          )
+
+          # ------------------------------------------
+          # 2. ROUTER SUCCESSFUL_PAYMENT PREMIUM
+          #    DANS LE PREMIER HANDLER EXISTANT
+          # ------------------------------------------
+
+          tree = ast.parse(source)
+
+          target_function = None
+
+          for node in tree.body:
+              if (
+                  isinstance(node, ast.FunctionDef)
+                  and node.name
+                  == "handle_profile_successful_payment"
+              ):
+                  target_function = node
+                  break
+
+          if target_function is None:
+              raise RuntimeError(
+                  "handle_profile_successful_payment "
+                  "not found."
+              )
+
+          function_lines = (
+              source.splitlines(keepends=True)
+          )
+
+          function_start = sum(
+              len(line)
+              for line in function_lines[
+                  :target_function.lineno - 1
+              ]
+          )
+
+          function_end = sum(
+              len(line)
+              for line in function_lines[
+                  :target_function.end_lineno
+              ]
+          )
+
+          function_block = source[
+              function_start:function_end
+          ]
+
+          payment_line = (
+              "    payment = "
+              "message.successful_payment"
+          )
+
+          if payment_line not in function_block:
+              raise RuntimeError(
+                  "Successful payment assignment "
+                  "not found in target handler."
+              )
+
+          premium_success_code = '''
+    if (
+        isinstance(
+            payment.invoice_payload,
+            str,
+        )
+        and payment.invoice_payload.startswith(
+            "astrovibe_premium:"
+        )
+    ):
+        from premium_stars_handlers import (
+            process_successful_premium_payment,
+        )
+
+        premium_result = (
+            process_successful_premium_payment(
+                get_db_connection=(
+                    get_db_connection
+                ),
+                payload=(
+                    payment.invoice_payload
+                ),
+                currency=payment.currency,
+                total_amount=(
+                    payment.total_amount
+                ),
+                telegram_payment_charge_id=(
+                    payment.telegram_payment_charge_id
+                ),
+                telegram_user_id=(
+                    message.from_user.id
+                ),
+                telegram_subscription_id=None,
+                subscription_expiration_date=(
+                    getattr(
+                        payment,
+                        "subscription_expiration_date",
+                        None,
+                    )
+                ),
+                is_recurring=(
+                    getattr(
+                        payment,
+                        "is_recurring",
+                        None,
+                    )
+                ),
+                is_first_recurring=(
+                    getattr(
+                        payment,
+                        "is_first_recurring",
+                        None,
+                    )
+                ),
+            )
+        )
+
+        language = get_user_language(
+            message.from_user.id
+        )
+
+        if premium_result["success"]:
+            if language == "en":
+                confirmation_text = (
+                    "💎 AstroVibe Premium is active!\\n\\n"
+                    "Your Premium features are now "
+                    "unlocked."
+                )
+            else:
+                confirmation_text = (
+                    "💎 AstroVibe Premium est actif !\\n\\n"
+                    "Tes fonctionnalités Premium sont "
+                    "maintenant débloquées."
+                )
+
+            bot.send_message(
+                message.chat.id,
+                confirmation_text,
+                reply_markup=premium_menu(
+                    language
+                ),
+            )
+
+        else:
+            reason = premium_result.get(
+                "reason",
+                "unknown_error",
+            )
+
+            if reason == "duplicate_charge":
+                if language == "en":
+                    error_text = (
+                        "💎 This Premium payment "
+                        "has already been processed."
+                    )
+                else:
+                    error_text = (
+                        "💎 Ce paiement Premium "
+                        "a déjà été traité."
+                    )
+            else:
+                if language == "en":
+                    error_text = (
+                        "The Premium payment could not "
+                        "be validated. Please contact "
+                        "payment support."
+                    )
+                else:
+                    error_text = (
+                        "Le paiement Premium n'a pas pu "
+                        "être validé. Contacte le support "
+                        "paiement."
+                    )
+
+            bot.send_message(
+                message.chat.id,
+                error_text,
+            )
+
+        return
+'''
+
+          function_block = (
+              function_block.replace(
+                  payment_line,
+                  payment_line
+                  + premium_success_code,
+                  1,
+              )
+          )
+
+          source = (
+              source[:function_start]
+              + function_block
+              + source[function_end:]
+          )
+
+          # ------------------------------------------
+          # 3. AJOUTER LE PRE-CHECKOUT PREMIUM
+          # ------------------------------------------
+
+          insertion_marker = (
+              "# PROFILE PURCHASE NEON CONNECTION"
+          )
+
+          marker_index = source.find(
+              insertion_marker
+          )
+
+          if marker_index == -1:
+              raise RuntimeError(
+                  "Profile purchase Neon marker "
+                  "not found."
+              )
+
+          line_start = source.rfind(
+              "\n",
+              0,
+              marker_index,
+          )
+
+          if line_start == -1:
+              line_start = marker_index
+          else:
+              line_start += 1
+
+          premium_pre_checkout_block = '''
+# ==================================================
+# PREMIUM STARS PAYMENT CONNECTION
+# ==================================================
+
+@bot.pre_checkout_query_handler(
+    func=lambda query: (
+        isinstance(
+            query.invoice_payload,
+            str,
+        )
+        and query.invoice_payload.startswith(
+            "astrovibe_premium:"
+        )
+    )
+)
+def astro_premium_pre_checkout(query):
+    from premium_stars_handlers import (
+        process_premium_pre_checkout,
+    )
+
+    result = process_premium_pre_checkout(
+        payload=query.invoice_payload,
+        currency=query.currency,
+        total_amount=query.total_amount,
+        telegram_user_id=query.from_user.id,
+    )
+
+    if result["success"]:
+        bot.answer_pre_checkout_query(
+            query.id,
+            ok=True,
+        )
+    else:
+        bot.answer_pre_checkout_query(
+            query.id,
+            ok=False,
+            error_message=(
+                "Paiement Premium invalide. "
+                "Invalid Premium payment."
+            ),
+        )
+
+
+'''
+
+          source = (
+              source[:line_start]
+              + premium_pre_checkout_block
+              + source[line_start:]
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8",
+          )
+
+          print(
+              "PREMIUM STARS PAYMENT CONNECTED"
+          )
+          PY
+
+      - name: Compile complete AstroVibe stack
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile premium_engine.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile profile_purchase_delivery.py
+          python -m py_compile personal_profile_v2_engine.py
+
+      - name: Verify Premium invoice wiring
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          ast.parse(source)
+
+          required = (
+              "PREMIUM STARS INVOICE ENTRY",
+              "build_premium_invoice",
+              "types.LabeledPrice",
+              "bot.send_invoice",
+              "subscription_period",
+              "astrovibe_premium:",
+              "astro_premium_pre_checkout",
+              "process_premium_pre_checkout",
+              "process_successful_premium_payment",
+              "subscription_expiration_date",
+              "is_recurring",
+              "is_first_recurring",
+              "get_db_connection",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("OK:", marker)
+
+          assert source.count(
+              "# PREMIUM STARS PAYMENT CONNECTION"
+          ) == 1
+
+          assert source.count(
+              "# PREMIUM STARS INVOICE ENTRY"
+          ) == 1
+
+          print("PREMIUM WIRING VERIFIED")
+          PY
+
+      - name: Verify Profile purchase wiring preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_profile_v2:",
+              "handle_profile_pre_checkout",
+              "process_profile_pre_checkout",
+              "handle_profile_successful_payment",
+              "process_profile_successful_payment",
+              "astro_profile_pre_checkout",
+              "astro_profile_successful_payment",
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "init_profile_purchase_table",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("PROFILE OK:", marker)
+
+          assert source.count(
+              "astrovibe_profile_v2:"
+          ) >= 4
+
+          print(
+              "PROFILE 390 XTR WIRING PRESERVED"
+          )
+          PY
+
+      - name: Verify Premium payment contract
+        run: |
+          python - <<'PY'
+          from premium_stars_payment import (
+              build_premium_invoice,
+              validate_premium_pre_checkout,
+              validate_premium_successful_payment,
+          )
+
+          invoice = build_premium_invoice(
+              user_id=123456789,
+              language="fr",
+          )
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["prices"][0]["amount"] == 199
+          assert invoice["subscription_period"] == 2592000
+
+          assert (
+              invoice["payload"]
+              == "astrovibe_premium:123456789"
+          )
+
+          checkout = (
+              validate_premium_pre_checkout(
+                  payload=invoice["payload"],
+                  currency="XTR",
+                  total_amount=199,
+                  telegram_user_id=123456789,
+              )
+          )
+
+          assert checkout["valid"] is True
+
+          payment = (
+              validate_premium_successful_payment(
+                  payload=invoice["payload"],
+                  currency="XTR",
+                  total_amount=199,
+                  telegram_payment_charge_id=(
+                      "TEST_PREMIUM_CONNECT_001"
+                  ),
+                  telegram_user_id=123456789,
+                  subscription_expiration_date=(
+                      1893456000
+                  ),
+                  is_recurring=True,
+                  is_first_recurring=True,
+              )
+          )
+
+          assert payment["valid"] is True
+          assert payment["amount"] == 199
+          assert payment["currency"] == "XTR"
+          assert payment["is_recurring"] is True
+
+          print(
+              "PREMIUM PAYMENT CONTRACT OK"
+          )
+          PY
+
+      - name: Verify Premium V1 preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          premium_engine = Path(
+              "premium_engine.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          required_bot = (
+              "def is_premium",
+              "SELECT premium",
+              "def premium_menu",
+              "premium_subscription_buttons",
+              "subscription_premium",
+              "subscription_free",
+          )
+
+          for marker in required_bot:
+              assert marker in source, marker
+              print("PREMIUM V1 OK:", marker)
+
+          required_engine = (
+              "generate_daily_plus",
+              "generate_weekly",
+              "generate_monthly",
+              "generate_yearly",
+              "generate_premium_compatibility",
+          )
+
+          for marker in required_engine:
+              assert marker in premium_engine, marker
+
+          print("PREMIUM V1 PRESERVED")
+          PY
+
+      - name: Verify points and referral untouched
+        run: |
+          git diff -- bot.py > bot-diff.txt
+
+          if grep -Eiq \
+            "referral|parrain|points|bonus|streak" \
+            bot-diff.txt; then
+            echo "Points or referral code appeared in diff."
+            echo "Stopping before commit."
+            cat bot-diff.txt
+            exit 1
+          fi
+
+          echo "POINTS AND REFERRAL UNTOUCHED"
+
+      - name: Show bot.py changes
+        run: |
+          echo "========== BOT.PY DIFF =========="
+          git diff -- bot.py
+          echo "================================="
+
+      - name: Verify only bot.py changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = {
+              line.strip()
+              for line in result.stdout.splitlines()
+              if line.strip()
+          }
+
+          if changed != {"bot.py"}:
+              raise RuntimeError(
+                  "Unexpected changed files: "
+                  + repr(sorted(changed))
+              )
+
+          print("ONLY BOT.PY CHANGED")
+          PY
+
+      - name: Commit Premium Stars connection
+        run: |
+          rm -f bot-diff.txt
+
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No bot.py change to commit."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Connect Premium Stars subscription"
+          git push
