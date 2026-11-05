@@ -1,0 +1,783 @@
+name: Integrate Payment Support
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-paysupport:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f bot.py
+          test -f paysupport_engine.py
+          test -f terms_engine.py
+          test -f premium_engine.py
+          test -f premium_stars_payment.py
+          test -f profile_purchase_engine.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Create payment support flow
+        run: |
+          cat > paysupport_flow.py <<'PY'
+          # ==================================================
+          # ASTROVIBE PAYMENT SUPPORT TELEGRAM FLOW
+          # ==================================================
+
+          SUPPORT_CALLBACK_PREFIX = "paysupport:"
+
+          SUPPORT_CATEGORIES = {
+              "profile": {
+                  "fr": "✨ Profil Personnel",
+                  "en": "✨ Personal Profile",
+              },
+              "premium": {
+                  "fr": "💎 Premium",
+                  "en": "💎 Premium",
+              },
+              "payment": {
+                  "fr": "⭐ Paiement / Stars",
+                  "en": "⭐ Payment / Stars",
+              },
+              "subscription": {
+                  "fr": "🔄 Abonnement",
+                  "en": "🔄 Subscription",
+              },
+              "refund": {
+                  "fr": "↩️ Remboursement",
+                  "en": "↩️ Refund",
+              },
+              "other": {
+                  "fr": "❓ Autre",
+                  "en": "❓ Other",
+              },
+          }
+
+
+          def normalize_language(language):
+              if language == "en":
+                  return "en"
+
+              return "fr"
+
+
+          def get_support_intro(language="fr"):
+              language = normalize_language(
+                  language
+              )
+
+              if language == "en":
+                  return (
+                      "🆘 AstroVibe Payment Support\n\n"
+                      "What do you need help with?\n\n"
+                      "Choose a category below.\n\n"
+                      "AstroVibe can create a private "
+                      "support ticket without revealing "
+                      "a personal Telegram account."
+                  )
+
+              return (
+                  "🆘 Support paiement AstroVibe\n\n"
+                  "Avec quoi as-tu besoin d’aide ?\n\n"
+                  "Choisis une catégorie ci-dessous.\n\n"
+                  "AstroVibe peut créer un ticket de "
+                  "support privé sans révéler de compte "
+                  "Telegram personnel."
+              )
+
+
+          def get_category_label(
+              category,
+              language="fr",
+          ):
+              language = normalize_language(
+                  language
+              )
+
+              category_data = (
+                  SUPPORT_CATEGORIES.get(
+                      category
+                  )
+              )
+
+              if not category_data:
+                  return None
+
+              return category_data[
+                  language
+              ]
+
+
+          def get_category_from_callback(
+              callback_data,
+          ):
+              if not isinstance(
+                  callback_data,
+                  str,
+              ):
+                  return None
+
+              if not callback_data.startswith(
+                  SUPPORT_CALLBACK_PREFIX
+              ):
+                  return None
+
+              category = callback_data[
+                  len(SUPPORT_CALLBACK_PREFIX):
+              ]
+
+              if category not in (
+                  SUPPORT_CATEGORIES
+              ):
+                  return None
+
+              return category
+
+
+          def get_product_for_category(
+              category,
+          ):
+              if category == "profile":
+                  return "profile"
+
+              if category in {
+                  "premium",
+                  "subscription",
+              }:
+                  return "premium"
+
+              return None
+
+
+          def get_amount_for_category(
+              category,
+          ):
+              if category == "profile":
+                  return 390
+
+              if category in {
+                  "premium",
+                  "subscription",
+              }:
+                  return 199
+
+              return None
+
+
+          def get_description_prompt(
+              category,
+              language="fr",
+          ):
+              language = normalize_language(
+                  language
+              )
+
+              label = get_category_label(
+                  category,
+                  language,
+              )
+
+              if language == "en":
+                  return (
+                      f"{label}\n\n"
+                      "Describe the issue in one message.\n\n"
+                      "Please do not send passwords, "
+                      "Telegram login codes or other "
+                      "secret information."
+                  )
+
+              return (
+                  f"{label}\n\n"
+                  "Décris ton problème en un seul "
+                  "message.\n\n"
+                  "Ne transmets jamais de mot de passe, "
+                  "de code de connexion Telegram ou "
+                  "d’autre information secrète."
+              )
+
+
+          def get_support_error_text(
+              language="fr",
+          ):
+              language = normalize_language(
+                  language
+              )
+
+              if language == "en":
+                  return (
+                      "⚠️ AstroVibe could not create "
+                      "the support ticket right now.\n\n"
+                      "Please try /paysupport again "
+                      "in a few moments."
+                  )
+
+              return (
+                  "⚠️ AstroVibe n’a pas pu créer "
+                  "le ticket de support pour le "
+                  "moment.\n\n"
+                  "Réessaie /paysupport dans "
+                  "quelques instants."
+              )
+          PY
+
+      - name: Patch payment support into bot
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE PAYSUPPORT ROUTING"
+          )
+
+          if marker in source:
+              raise RuntimeError(
+                  "Payment support routing "
+                  "already installed."
+              )
+
+          menu_marker = (
+              "def menu(message):"
+          )
+
+          menu_position = source.find(
+              menu_marker
+          )
+
+          if menu_position == -1:
+              raise RuntimeError(
+                  "menu(message) router not found."
+              )
+
+          language_marker = (
+              "    language = "
+              "get_user_language(user_id)"
+          )
+
+          language_position = source.find(
+              language_marker,
+              menu_position,
+          )
+
+          if language_position == -1:
+              raise RuntimeError(
+                  "Language initialization "
+                  "not found in menu(message)."
+              )
+
+          terms_marker = (
+              "# TERMS ROUTING IN MAIN MENU"
+          )
+
+          terms_position = source.find(
+              terms_marker,
+              menu_position,
+          )
+
+          if terms_position == -1:
+              raise RuntimeError(
+                  "Terms routing marker not found."
+              )
+
+          paysupport_lines = [
+              "    # ASTROVIBE PAYSUPPORT ROUTING",
+              "    if command_name == \"/paysupport\":",
+              "        from paysupport_flow import (",
+              "            SUPPORT_CATEGORIES,",
+              "            get_category_label,",
+              "            get_support_intro,",
+              "        )",
+              "",
+              "        support_markup = (",
+              "            types.InlineKeyboardMarkup()",
+              "        )",
+              "",
+              "        category_order = (",
+              "            \"profile\",",
+              "            \"premium\",",
+              "            \"payment\",",
+              "            \"subscription\",",
+              "            \"refund\",",
+              "            \"other\",",
+              "        )",
+              "",
+              "        for category in category_order:",
+              "            label = get_category_label(",
+              "                category,",
+              "                language,",
+              "            )",
+              "",
+              "            support_markup.add(",
+              "                types.InlineKeyboardButton(",
+              "                    text=label,",
+              "                    callback_data=(",
+              "                        \"paysupport:\"",
+              "                        + category",
+              "                    ),",
+              "                )",
+              "            )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            get_support_intro(language),",
+              "            reply_markup=support_markup,",
+              "        )",
+              "",
+              "        return",
+              "",
+          ]
+
+          paysupport_block = (
+              "\n".join(
+                 ()",
+              "            ),",
+              "            language=language,",
+              "            category=category,",
+              "            product=(",
+              "                get_product_for_category(",
+              "                    category",
+              "                )",
+              "            ),",
+              "            payment_amount_stars=(",
+              "                get_amount_for_category(",
+              "                    category",
+              "                )",
+              "            ),",
+              "        )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            get_ticket_created_text(",
+              "                ticket",
+              "            ),",
+              "            reply_markup=main_menu(",
+              "                language",
+              "            ),",
+              "        )",
+              "",
+              "    except Exception as error:",
+              "        print(",
+              "            \"PAYSUPPORT TICKET ERROR:\",",
+              "            repr(error),",
+              "            flush=True,",
+              "        )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            get_support_error_text(",
+              "                language",
+              "            ),",
+              "            reply_markup=main_menu(",
+              "                language",
+              "            ),",
+              "        )",
+              "",
+          ]
+
+          callback_block = "\n".join(
+              callback_block_lines
+          )
+
+          insertion_marker = (
+              "# PROFILE PURCHASE NEON CONNECTION"
+          )
+
+          callback_position = source.find(
+              insertion_marker
+          )
+
+          if callback_position == -1:
+              raise RuntimeError(
+                  "Safe callback insertion "
+                  "marker not found."
+              )
+
+          source = (
+              source[:callback_position]
+              + callback_block
+              + "\n\n"
+              + source[callback_position:]
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8",
+          )
+
+          print(
+              "PAYSUPPORT ROUTING PATCHED"
+          )
+          PY
+
+      - name: Compile support integration
+        run: |
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_flow.py
+          python -m py_compile bot.py
+
+      - name: Test payment support flow
+        run: |
+          python - <<'PY'
+          from paysupport_flow import (
+              SUPPORT_CATEGORIES,
+              get_support_intro,
+              get_category_label,
+              get_category_from_callback,
+              get_product_for_category,
+              get_amount_for_category,
+              get_description_prompt,
+          )
+
+          assert len(
+              SUPPORT_CATEGORIES
+          ) == 6
+
+          assert (
+              "Support paiement AstroVibe"
+              in get_support_intro("fr")
+          )
+
+          assert (
+              "AstroVibe Payment Support"
+              in get_support_intro("en")
+          )
+
+          assert (
+              get_category_from_callback(
+                  "paysupport:profile"
+              )
+              == "profile"
+          )
+
+          assert (
+              get_category_from_callback(
+                  "paysupport:premium"
+              )
+              == "premium"
+          )
+
+          assert (
+              get_category_from_callback(
+                  "wrong:premium"
+              )
+              is None
+          )
+
+          assert (
+              get_product_for_category(
+                  "profile"
+              )
+              == "profile"
+          )
+
+          assert (
+              get_product_for_category(
+                  "premium"
+              )
+              == "premium"
+          )
+
+          assert (
+              get_product_for_category(
+                  "subscription"
+              )
+              == "premium"
+          )
+
+          assert (
+              get_product_for_category(
+                  "other"
+              )
+              is None
+          )
+
+          assert (
+              get_amount_for_category(
+                  "profile"
+              )
+              == 390
+          )
+
+          assert (
+              get_amount_for_category(
+                  "premium"
+              )
+              == 199
+          )
+
+          assert (
+              get_amount_for_category(
+                  "payment"
+              )
+              is None
+          )
+
+          assert (
+              "Profil"
+              in get_category_label(
+                  "profile",
+                  "fr",
+              )
+          )
+
+          assert (
+              "Profile"
+              in get_category_label(
+                  "profile",
+                  "en",
+              )
+          )
+
+          assert (
+              "Décris"
+              in get_description_prompt(
+                  "premium",
+                  "fr",
+              )
+          )
+
+          assert (
+              "Describe"
+              in get_description_prompt(
+                  "premium",
+                  "en",
+              )
+          )
+
+          print("PAYSUPPORT FLOW FR OK")
+          print("PAYSUPPORT FLOW EN OK")
+          PY
+
+      - name: Verify paysupport routing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "ASTROVIBE PAYSUPPORT ROUTING",
+              'command_name == "/paysupport"',
+              "paysupport:",
+              "handle_paysupport_category",
+              "register_next_step_handler",
+              "create_paysupport_ticket_from_message",
+              "create_support_ticket",
+              "get_ticket_created_text",
+              "get_db_connection",
+              "PAYSUPPORT TICKET ERROR:",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print(
+                  "PAYSUPPORT OK:",
+                  marker,
+              )
+
+          menu_start = source.find(
+              "def menu(message):"
+          )
+
+          paysupport_position = source.find(
+              "# ASTROVIBE PAYSUPPORT ROUTING",
+              menu_start,
+          )
+
+          unknown_position = source.find(
+              '"unknown_request"',
+              menu_start,
+          )
+
+          assert menu_start != -1
+          assert paysupport_position != -1
+          assert unknown_position != -1
+
+          assert (
+              paysupport_position
+              < unknown_position
+          )
+
+          print(
+              "PAYSUPPORT EXECUTES "
+              "BEFORE FALLBACK"
+          )
+          PY
+
+      - name: Verify Terms preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          assert (
+              "# TERMS ROUTING IN MAIN MENU"
+              in source
+          )
+
+          assert (
+              'command_name == "/terms"'
+              in source
+          )
+
+          assert (
+              "ASTROVIBE TERMS COMMAND"
+              in source
+          )
+
+          print("TERMS PRESERVED")
+          PY
+
+      - name: Verify Profile preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_profile_v2:",
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "init_profile_purchase_table",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+
+          print(
+              "PROFILE 390 STARS PRESERVED"
+          )
+          PY
+
+      - name: Verify Premium preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_premium:",
+              "createInvoiceLink",
+              "process_premium_pre_checkout",
+              "process_successful_premium_payment",
+              "premium_subscription_buttons",
+              "def is_premium",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+
+          print(
+              "PREMIUM 199 STARS PRESERVED"
+          )
+          PY
+
+      - name: Remove Python cache
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Verify expected files changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "status",
+                  "--short",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          print(result.stdout)
+
+          allowed = {
+              "bot.py",
+              "paysupport_flow.py",
+          }
+
+          changed = set()
+
+          for line in result.stdout.splitlines():
+              if not line.strip():
+                  continue
+
+              changed.add(
+                  line[3:].strip()
+              )
+
+          unexpected = (
+              changed - allowed
+          )
+
+          assert not unexpected, (
+              "Unexpected changed files: "
+              + repr(sorted(unexpected))
+          )
+
+          assert "bot.py" in changed
+
+          assert (
+              "paysupport_flow.py"
+              in changed
+          )
+
+          print(
+              "ONLY SUPPORT FILES CHANGED"
+          )
+          PY
+
+      - name: Show changes
+        run: |
+          git diff -- bot.py
+          git diff --no-index /dev/null paysupport_flow.py || true
+
+      - name: Commit payment support integration
+        run: |
+          git add bot.py paysupport_flow.py
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Integrate AstroVibe payment support"
+          git push
