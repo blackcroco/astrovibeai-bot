@@ -89,13 +89,27 @@ jobs:
               if node.lineno <= marker_line:
                   continue
 
+              call_source = ast.get_source_segment(
+                  source,
+                  node,
+              )
+
+              if not call_source:
+                  continue
+
+              if (
+                  "subscription_period"
+                  not in call_source
+              ):
+                  continue
+
               target_call = node
               break
 
           if target_call is None:
               raise RuntimeError(
-                  "Premium bot.send_invoice call "
-                  "not found."
+                  "Premium bot.send_invoice "
+                  "subscription call not found."
               )
 
           lines = source.splitlines(
@@ -119,15 +133,6 @@ jobs:
           original_block = source[
               statement_start:statement_end
           ]
-
-          if (
-              "subscription_period"
-              not in original_block
-          ):
-              raise RuntimeError(
-                  "Located send_invoice call "
-                  "is not the Premium subscription."
-              )
 
           first_line = lines[
               target_call.lineno - 1
@@ -161,10 +166,7 @@ jobs:
               + indentation
               + '    premium_invoice["prices"],\n'
               + indentation
-              + (
-                  '    premium_invoice['
-                  '"subscription_period"],\n'
-              )
+              + '    premium_invoice["subscription_period"],\n'
               + indentation
               + "    flush=True,\n"
               + indentation
@@ -176,9 +178,7 @@ jobs:
               + indentation
               + "    print(\n"
               + indentation
-              + (
-                  '        "PREMIUM INVOICE SENT",\n'
-              )
+              + '        "PREMIUM INVOICE SENT",\n'
               + indentation
               + "        flush=True,\n"
               + indentation
@@ -188,9 +188,7 @@ jobs:
               + indentation
               + "    print(\n"
               + indentation
-              + (
-                  '        "PREMIUM INVOICE ERROR:",\n'
-              )
+              + '        "PREMIUM INVOICE ERROR:",\n'
               + indentation
               + "        repr(error),\n"
               + indentation
@@ -207,46 +205,27 @@ jobs:
               + indentation
               + "            (\n"
               + indentation
-              + (
-                  '                "⚠️ Erreur temporaire '
-                  'lors de la création "\n'
-              )
+              + '                "⚠️ Erreur temporaire lors de la création "\n'
               + indentation
-              + (
-                  '                "de la facture '
-                  'Premium."\n'
-              )
+              + '                "de la facture Premium."\n'
               + indentation
-              + (
-                  '                if language != "en"\n'
-              )
+              + '                if language != "en"\n'
               + indentation
               + "                else\n"
               + indentation
-              + (
-                  '                "⚠️ Temporary error '
-                  'while creating "\n'
-              )
+              + '                "⚠️ Temporary error while creating "\n'
               + indentation
-              + (
-                  '                "the Premium invoice."\n'
-              )
+              + '                "the Premium invoice."\n'
               + indentation
               + "            ),\n"
               + indentation
               + "        )\n"
               + indentation
-              + (
-                  "    except Exception "
-                  "as notify_error:\n"
-              )
+              + "    except Exception as notify_error:\n"
               + indentation
               + "        print(\n"
               + indentation
-              + (
-                  '            "PREMIUM DIAGNOSTIC '
-                  'MESSAGE ERROR:",\n'
-              )
+              + '            "PREMIUM DIAGNOSTIC MESSAGE ERROR:",\n'
               + indentation
               + "            repr(notify_error),\n"
               + indentation
@@ -332,6 +311,32 @@ jobs:
               print("PROFILE OK:", marker)
 
           print("PROFILE 390 STARS PRESERVED")
+          PY
+
+      - name: Verify Premium connection preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "PREMIUM STARS INVOICE ENTRY",
+              "astrovibe_premium:",
+              "astro_premium_pre_checkout",
+              "process_premium_pre_checkout",
+              "process_successful_premium_payment",
+              "premium_subscription_buttons",
+              "def is_premium",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("PREMIUM OK:", marker)
+
+          print("PREMIUM CONNECTION PRESERVED")
           PY
 
       - name: Verify only bot.py changed
