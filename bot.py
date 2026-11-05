@@ -927,33 +927,62 @@ def main_menu(language="fr"):
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "horoscope_button")
+            get_text(
+                language,
+                "horoscope_button"
+            )
         ),
         types.KeyboardButton(
-            get_text(language, "compatibility_button")
+            get_text(
+                language,
+                "compatibility_button"
+            )
+        )
+    )
+
+    profile_button = (
+        "✨ My AstroVibe Profile"
+        if language == "en"
+        else "✨ Mon Profil AstroVibe"
+    )
+
+    markup.row(
+        types.KeyboardButton(
+            profile_button
+        ),
+        types.KeyboardButton(
+            get_text(
+                language,
+                "premium_button"
+            )
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "bonus_button")
+            get_text(
+                language,
+                "bonus_button"
+            )
         ),
         types.KeyboardButton(
-            get_text(language, "points_button")
+            get_text(
+                language,
+                "points_button"
+            )
         )
     )
 
     markup.row(
         types.KeyboardButton(
-            get_text(language, "premium_button")
-        ),
-        types.KeyboardButton(
-            get_text(language, "settings_button")
+            get_text(
+                language,
+                "settings_button"
+            )
         )
     )
 
     return markup
-
 def settings_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True
