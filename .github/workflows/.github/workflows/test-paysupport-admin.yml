@@ -1,0 +1,1070 @@
+name: Test Payment Support Admin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-paysupport-admin:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPPORT_ADMIN_TELEGRAM_ID: "123456789"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f paysupport_admin.py
+          test -f paysupport_engine.py
+          test -f paysupport_flow.py
+          test -f bot.py
+          test -f terms_engine.py
+          test -f premium_stars_payment.py
+          test -f profile_purchase_engine.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Compile support admin stack
+        run: |
+          python -m py_compile paysupport_admin.py
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_flow.py
+
+          echo "SUPPORT ADMIN STACK COMPILES"
+
+      - name: Test admin environment configuration
+        run: |
+          python - <<'PY'
+          import os
+
+          from paysupport_admin import (
+              ADMIN_ENV_NAME,
+              ADMIN_REPLY_PREFIX,
+              get_support_admin_id,
+              is_support_admin,
+          )
+
+          assert ADMIN_ENV_NAME == (
+              "SUPPORT_ADMIN_TELEGRAM_ID"
+          )
+
+          assert ADMIN_REPLY_PREFIX == (
+              "/supportreply"
+          )
+
+          assert os.getenv(
+              ADMIN_ENV_NAME
+          ) == "123456789"
+
+          assert (
+              get_support_admin_id()
+              == 123456789
+          )
+
+          assert (
+              is_support_admin(
+                  123456789
+              )
+              is True
+          )
+
+          assert (
+              is_support_admin(
+                  "123456789"
+              )
+              is True
+          )
+
+          assert (
+              is_support_admin(
+                  999999999
+              )
+              is False
+          )
+
+          assert (
+              is_support_admin(
+                  "invalid"
+              )
+              is False
+          )
+
+          print("ADMIN ENVIRONMENT OK")
+          print("AUTHORIZED ADMIN OK")
+          print("UNAUTHORIZED USER REJECTED")
+          PY
+
+      - name: Test missing and invalid admin configuration
+        run: |
+          python - <<'PY'
+          import os
+
+          import paysupport_admin as admin
+
+
+          original = os.environ.get(
+              admin.ADMIN_ENV_NAME
+          )
+
+
+          def restore():
+              if original is None:
+                  os.environ.pop(
+                      admin.ADMIN_ENV_NAME,
+                      None,
+                  )
+              else:
+                  os.environ[
+                      admin.ADMIN_ENV_NAME
+                  ] = original
+
+
+          try:
+              os.environ.pop(
+                  admin.ADMIN_ENV_NAME,
+                  None,
+              )
+
+              assert (
+                  admin.get_support_admin_id()
+                  is None
+              )
+
+              assert (
+                  admin.is_support_admin(
+                      123456789
+                  )
+                  is False
+              )
+
+              os.environ[
+                  admin.ADMIN_ENV_NAME
+              ] = "invalid"
+
+              assert (
+                  admin.get_support_admin_id()
+                  is None
+              )
+
+              os.environ[
+                  admin.ADMIN_ENV_NAME
+              ] = "0"
+
+              assert (
+                  admin.get_support_admin_id()
+                  is None
+              )
+
+              os.environ[
+                  admin.ADMIN_ENV_NAME
+              ] = "-1"
+
+              assert (
+                  admin.get_support_admin_id()
+                  is None
+              )
+
+          finally:
+              restore()
+
+          print(
+              "INVALID ADMIN CONFIGURATION REJECTED"
+          )
+          PY
+
+      - name: Test admin ticket notification format
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              build_admin_ticket_message,
+              get_category_label,
+              get_product_label,
+          )
+
+
+          ticket = {
+              "ticket_code": "AV-B0DC89",
+              "user_id": 5388789237,
+              "language": "fr",
+              "category": "premium",
+              "product": "premium",
+              "status": "escalated",
+              "user_message": (
+                  "Mon paiement Premium a été "
+                  "débité mais mon accès reste "
+                  "gratuit."
+              ),
+              "ai_summary": (
+                  "Paiement Premium signalé, "
+                  "accès non actif."
+              ),
+              "payment_amount_stars": 199,
+              "telegram_payment_charge_id": (
+                  "TEST_CHARGE_001"
+              ),
+          }
+
+          message = build_admin_ticket_message(
+              ticket
+          )
+
+          required = (
+              "ASTROVIBE — TICKET SUPPORT",
+              "AV-B0DC89",
+              "5388789237",
+              "Premium",
+              "199 ⭐",
+              "Mon paiement Premium",
+              "Paiement Premium signalé",
+              "TEST_CHARGE_001",
+              "/supportreply",
+          )
+
+          for marker in required:
+              assert marker in message, marker
+              print(
+                  "NOTIFICATION OK:",
+                  marker,
+              )
+
+          assert (
+              get_product_label(
+                  "profile",
+                  "fr",
+              )
+              == "Profil Personnel"
+          )
+
+          assert (
+              get_product_label(
+                  "profile",
+                  "en",
+              )
+              == "Personal Profile"
+          )
+
+          assert (
+              get_product_label(
+                  "premium",
+                  "fr",
+              )
+              == "Premium"
+          )
+
+          assert (
+              get_category_label(
+                  "subscription",
+                  "fr",
+              )
+              == "Abonnement"
+          )
+
+          assert (
+              get_category_label(
+                  "subscription",
+                  "en",
+              )
+              == "Subscription"
+          )
+
+          print(
+              "ADMIN TICKET FORMAT VERIFIED"
+          )
+          PY
+
+      - name: Test incomplete ticket notification
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              build_admin_ticket_message,
+          )
+
+
+          ticket = {
+              "ticket_code": "AV-EMPTY01",
+              "user_id": 123,
+              "language": "en",
+              "category": "other",
+              "product": None,
+              "user_message": "Test",
+              "ai_summary": None,
+              "payment_amount_stars": None,
+              "telegram_payment_charge_id": None,
+          }
+
+          message = build_admin_ticket_message(
+              ticket
+          )
+
+          assert "AV-EMPTY01" in message
+          assert "Non précisé" in message
+          assert "Non fourni" in message
+          assert "Pas encore disponible" in message
+
+          try:
+              build_admin_ticket_message(
+                  "invalid"
+              )
+          except ValueError:
+              pass
+          else:
+              raise AssertionError(
+                  "Invalid ticket accepted"
+              )
+
+          print(
+              "INCOMPLETE TICKET HANDLED"
+          )
+          print(
+              "INVALID TICKET REJECTED"
+          )
+          PY
+
+      - name: Test admin reply command parsing
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              parse_admin_reply_command,
+          )
+
+
+          valid = parse_admin_reply_command(
+              "/supportreply "
+              "AV-B0DC89 "
+              "Ton accès Premium a été vérifié."
+          )
+
+          assert valid is not None
+
+          assert (
+              valid["ticket_code"]
+              == "AV-B0DC89"
+          )
+
+          assert (
+              valid["reply"]
+              == (
+                  "Ton accès Premium "
+                  "a été vérifié."
+              )
+          )
+
+          with_bot_username = (
+              parse_admin_reply_command(
+                  "/supportreply@AstrovibeAIbot "
+                  "av-b0dc89 "
+                  "Réponse depuis AstroVibe."
+              )
+          )
+
+          assert with_bot_username is not None
+
+          assert (
+              with_bot_username[
+                  "ticket_code"
+              ]
+              == "AV-B0DC89"
+          )
+
+          invalid_commands = (
+              None,
+              "",
+              "   ",
+              "/supportreply",
+              "/supportreply AV-B0DC89",
+              "/wrong AV-B0DC89 réponse",
+              "/supportreply WRONG réponse",
+              "/supportreply AV-B0DC89   ",
+          )
+
+          for command in invalid_commands:
+              assert (
+                  parse_admin_reply_command(
+                      command
+                  )
+                  is None
+              ), command
+
+          print(
+              "ADMIN REPLY PARSING OK"
+          )
+          print(
+              "INVALID COMMANDS REJECTED"
+          )
+          PY
+
+      - name: Test French and English user replies
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              build_user_admin_reply,
+          )
+
+
+          french_ticket = {
+              "ticket_code": "AV-FR0001",
+              "language": "fr",
+          }
+
+          english_ticket = {
+              "ticket_code": "AV-EN0001",
+              "language": "en",
+          }
+
+          french_text = build_user_admin_reply(
+              french_ticket,
+              "Ton accès a été rétabli.",
+          )
+
+          english_text = build_user_admin_reply(
+              english_ticket,
+              "Your access has been restored.",
+          )
+
+          assert "AV-FR0001" in french_text
+          assert "Le support t’a répondu" in french_text
+          assert "Ton accès a été rétabli" in french_text
+
+          assert (
+              "compte Telegram personnel"
+              in french_text
+          )
+
+          assert "AV-EN0001" in english_text
+          assert (
+              "Our support team replied"
+              in english_text
+          )
+
+          assert (
+              "Your access has been restored"
+              in english_text
+          )
+
+          assert (
+              "personal Telegram account"
+              in english_text
+          )
+
+          print("FRENCH USER REPLY OK")
+          print("ENGLISH USER REPLY OK")
+          PY
+
+      - name: Test simulated admin notification
+        run: |
+          python - <<'PY'
+          import os
+
+          from paysupport_admin import (
+              ADMIN_ENV_NAME,
+              send_ticket_to_admin,
+          )
+
+
+          class FakeBot:
+              def __init__(self):
+                  self.sent = []
+
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  message = {
+                      "chat_id": chat_id,
+                      "text": text,
+                  }
+
+                  self.sent.append(
+                      message
+                  )
+
+                  return message
+
+
+          ticket = {
+              "ticket_code": "AV-ADMIN1",
+              "user_id": 555666777,
+              "language": "fr",
+              "category": "premium",
+              "product": "premium",
+              "user_message": (
+                  "Premium non activé."
+              ),
+              "payment_amount_stars": 199,
+          }
+
+          bot = FakeBot()
+
+          result = send_ticket_to_admin(
+              bot,
+              ticket,
+          )
+
+          assert result["success"] is True
+          assert result["reason"] == "sent"
+
+          assert (
+              result["admin_id"]
+              == 123456789
+          )
+
+          assert len(bot.sent) == 1
+
+          assert (
+              bot.sent[0]["chat_id"]
+              == 123456789
+          )
+
+          assert (
+              "AV-ADMIN1"
+              in bot.sent[0]["text"]
+          )
+
+          original = os.environ.pop(
+              ADMIN_ENV_NAME,
+              None,
+          )
+
+          try:
+              missing = send_ticket_to_admin(
+                  bot,
+                  ticket,
+              )
+
+              assert (
+                  missing["success"]
+                  is False
+              )
+
+              assert (
+                  missing["reason"]
+                  == "admin_not_configured"
+              )
+
+          finally:
+              if original is not None:
+                  os.environ[
+                      ADMIN_ENV_NAME
+                  ] = original
+
+          print(
+              "SIMULATED ADMIN NOTIFICATION OK"
+          )
+          print(
+              "MISSING ADMIN PROTECTION OK"
+          )
+          PY
+
+      - name: Test admin notification failure protection
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              send_ticket_to_admin,
+          )
+
+
+          class FailingBot:
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  raise RuntimeError(
+                      "Simulated Telegram failure"
+                  )
+
+
+          ticket = {
+              "ticket_code": "AV-FAIL01",
+              "user_id": 555,
+              "language": "fr",
+              "category": "payment",
+              "product": None,
+              "user_message": "Test",
+          }
+
+          result = send_ticket_to_admin(
+              FailingBot(),
+              ticket,
+          )
+
+          assert result["success"] is False
+          assert result["reason"] == "send_failed"
+
+          print(
+              "ADMIN DELIVERY FAILURE HANDLED"
+          )
+          PY
+
+      - name: Test complete simulated admin reply flow
+        run: |
+          python - <<'PY'
+          import paysupport_admin as admin
+          import paysupport_engine as engine
+
+
+          ticket = {
+              "id": 1,
+              "ticket_code": "AV-B0DC89",
+              "user_id": 987654321,
+              "language": "fr",
+              "category": "premium",
+              "product": "premium",
+              "status": "escalated",
+              "user_message": (
+                  "Mon Premium ne fonctionne pas."
+              ),
+              "ai_summary": None,
+              "ai_resolution": None,
+              "escalated_to_human": True,
+              "admin_reply": None,
+              "payment_amount_stars": 199,
+              "telegram_payment_charge_id": None,
+              "created_at": None,
+              "updated_at": None,
+              "resolved_at": None,
+          }
+
+          calls = {
+              "get_ticket": 0,
+              "save_reply": 0,
+          }
+
+
+          def fake_get_support_ticket(
+              get_db_connection,
+              ticket_code,
+          ):
+              calls["get_ticket"] += 1
+
+              assert (
+                  ticket_code
+                  == "AV-B0DC89"
+              )
+
+              return dict(ticket)
+
+
+          def fake_save_admin_reply(
+              get_db_connection,
+              ticket_code,
+              admin_reply,
+              resolve=True,
+          ):
+              calls["save_reply"] += 1
+
+              assert (
+                  ticket_code
+                  == "AV-B0DC89"
+              )
+
+              assert (
+                  admin_reply
+                  == "Ton accès a été vérifié."
+              )
+
+              assert resolve is True
+
+              return True
+
+
+          engine.get_support_ticket = (
+              fake_get_support_ticket
+          )
+
+          engine.save_admin_reply = (
+              fake_save_admin_reply
+          )
+
+
+          class FakeBot:
+              def __init__(self):
+                  self.sent = []
+
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  message = {
+                      "chat_id": chat_id,
+                      "text": text,
+                  }
+
+                  self.sent.append(
+                      message
+                  )
+
+                  return message
+
+
+          def forbidden_connection():
+              raise AssertionError(
+                  "Real database connection "
+                  "must not be used"
+              )
+
+
+          bot = FakeBot()
+
+          result = admin.process_admin_reply(
+              bot=bot,
+              get_db_connection=(
+                  forbidden_connection
+              ),
+              admin_user_id=123456789,
+              command_text=(
+                  "/supportreply "
+                  "AV-B0DC89 "
+                  "Ton accès a été vérifié."
+              ),
+          )
+
+          assert result["success"] is True
+          assert result["reason"] == "resolved"
+
+          assert (
+              result["ticket_code"]
+              == "AV-B0DC89"
+          )
+
+          assert (
+              result["user_id"]
+              == 987654321
+          )
+
+          assert calls["get_ticket"] == 1
+          assert calls["save_reply"] == 1
+
+          assert len(bot.sent) == 1
+
+          assert (
+              bot.sent[0]["chat_id"]
+              == 987654321
+          )
+
+          assert (
+              "Ton accès a été vérifié."
+              in bot.sent[0]["text"]
+          )
+
+          assert (
+              "AV-B0DC89"
+              in bot.sent[0]["text"]
+          )
+
+          print(
+              "COMPLETE ADMIN REPLY FLOW OK"
+          )
+          print(
+              "SIMULATED USER DELIVERY OK"
+          )
+          print(
+              "SIMULATED TICKET RESOLUTION OK"
+          )
+          PY
+
+      - name: Test unauthorized and invalid admin replies
+        run: |
+          python - <<'PY'
+          import paysupport_admin as admin
+
+
+          class ForbiddenBot:
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  raise AssertionError(
+                      "Telegram must not be called"
+                  )
+
+
+          def forbidden_connection():
+              raise AssertionError(
+                  "Database must not be called"
+              )
+
+
+          unauthorized = admin.process_admin_reply(
+              bot=ForbiddenBot(),
+              get_db_connection=(
+                  forbidden_connection
+              ),
+              admin_user_id=999999999,
+              command_text=(
+                  "/supportreply "
+                  "AV-B0DC89 réponse"
+              ),
+          )
+
+          assert (
+              unauthorized["success"]
+              is False
+          )
+
+          assert (
+              unauthorized["reason"]
+              == "unauthorized"
+          )
+
+          invalid = admin.process_admin_reply(
+              bot=ForbiddenBot(),
+              get_db_connection=(
+                  forbidden_connection
+              ),
+              admin_user_id=123456789,
+              command_text=(
+                  "/supportreply invalid"
+              ),
+          )
+
+          assert invalid["success"] is False
+
+          assert (
+              invalid["reason"]
+              == "invalid_command"
+          )
+
+          print(
+              "UNAUTHORIZED ADMIN REJECTED"
+          )
+
+          print(
+              "INVALID ADMIN COMMAND REJECTED"
+          )
+          PY
+
+      - name: Test missing ticket handling
+        run: |
+          python - <<'PY'
+          import paysupport_admin as admin
+          import paysupport_engine as engine
+
+
+          def fake_get_support_ticket(
+              get_db_connection,
+              ticket_code,
+          ):
+              return None
+
+
+          engine.get_support_ticket = (
+              fake_get_support_ticket
+          )
+
+
+          class ForbiddenBot:
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  raise AssertionError(
+                      "Telegram must not be called"
+                  )
+
+
+          result = admin.process_admin_reply(
+              bot=ForbiddenBot(),
+              get_db_connection=lambda: None,
+              admin_user_id=123456789,
+              command_text=(
+                  "/supportreply "
+                  "AV-NOTFOUND réponse"
+              ),
+          )
+
+          assert result["success"] is False
+
+          assert (
+              result["reason"]
+              == "ticket_not_found"
+          )
+
+          print(
+              "MISSING TICKET HANDLED"
+          )
+          PY
+
+      - name: Test user delivery failure protection
+        run: |
+          python - <<'PY'
+          import paysupport_admin as admin
+          import paysupport_engine as engine
+
+
+          ticket = {
+              "ticket_code": "AV-FAIL02",
+              "user_id": 987654321,
+              "language": "en",
+          }
+
+
+          def fake_get_support_ticket(
+              get_db_connection,
+              ticket_code,
+          ):
+              return ticket
+
+
+          def forbidden_save(
+              *args,
+              **kwargs,
+          ):
+              raise AssertionError(
+                  "Ticket must not be resolved "
+                  "if user delivery fails"
+              )
+
+
+          engine.get_support_ticket = (
+              fake_get_support_ticket
+          )
+
+          engine.save_admin_reply = (
+              forbidden_save
+          )
+
+
+          class FailingBot:
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+              ):
+                  raise RuntimeError(
+                      "Simulated delivery failure"
+                  )
+
+
+          result = admin.process_admin_reply(
+              bot=FailingBot(),
+              get_db_connection=lambda: None,
+              admin_user_id=123456789,
+              command_text=(
+                  "/supportreply "
+                  "AV-FAIL02 "
+                  "Test response"
+              ),
+          )
+
+          assert result["success"] is False
+
+          assert (
+              result["reason"]
+              == "user_delivery_failed"
+          )
+
+          print(
+              "USER DELIVERY FAILURE HANDLED"
+          )
+          print(
+              "TICKET NOT FALSELY RESOLVED"
+          )
+          PY
+
+      - name: Test admin confirmation messages
+        run: |
+          python - <<'PY'
+          from paysupport_admin import (
+              get_admin_resolution_text,
+          )
+
+
+          success = get_admin_resolution_text(
+              {
+                  "success": True,
+                  "ticket_code": "AV-B0DC89",
+              }
+          )
+
+          failure = get_admin_resolution_text(
+              {
+                  "success": False,
+                  "reason": "ticket_not_found",
+              }
+          )
+
+          assert "Ticket résolu" in success
+          assert "AV-B0DC89" in success
+          assert "transmise" in success
+
+          assert "Échec" in failure
+          assert "ticket_not_found" in failure
+
+          print(
+              "ADMIN SUCCESS MESSAGE OK"
+          )
+
+          print(
+              "ADMIN FAILURE MESSAGE OK"
+          )
+          PY
+
+      - name: Verify payment systems remain separate
+        run: |
+          test -f paysupport_admin.py
+          test -f paysupport_engine.py
+          test -f paysupport_flow.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f profile_stars_payment.py
+          test -f terms_engine.py
+          test -f bot.py
+
+          echo "ADMIN SUPPORT ENGINE EXISTS"
+          echo "SUPPORT TICKET ENGINE PRESERVED"
+          echo "PREMIUM STACK PRESERVED"
+          echo "PROFILE STACK PRESERVED"
+          echo "TERMS ENGINE PRESERVED"
+          echo "BOT.PY PRESERVED"
+
+      - name: Remove Python cache
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Verify no repository file changed
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final zero impact validation
+        run: |
+          echo "======================================="
+          echo "PAYMENT SUPPORT ADMIN TEST PASSED"
+          echo "======================================="
+          echo "Admin environment: OK"
+          echo "Admin authorization: OK"
+          echo "Unauthorized access protection: OK"
+          echo "Ticket notification format: OK"
+          echo "Admin notification simulation: OK"
+          echo "Admin reply parsing: OK"
+          echo "French user reply: OK"
+          echo "English user reply: OK"
+          echo "User delivery simulation: OK"
+          echo "Ticket resolution simulation: OK"
+          echo "Failure protections: OK"
+          echo "Premium payment stack preserved: OK"
+          echo "Profile payment stack preserved: OK"
+          echo "Real Telegram messages: 0"
+          echo "Real Neon writes: 0"
