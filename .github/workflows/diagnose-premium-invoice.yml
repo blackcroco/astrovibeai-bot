@@ -1,0 +1,239 @@
+name: Diagnose Premium Invoice
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-premium-invoice:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Patch Premium invoice diagnostics
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          if "PREMIUM INVOICE DIAGNOSTIC" in source:
+              raise RuntimeError(
+                  "Premium invoice diagnostic "
+                  "already installed."
+              )
+
+          start_marker = (
+              "        bot.send_invoice(\n"
+              "            chat_id=message.chat.id,"
+          )
+
+          start = source.find(start_marker)
+
+          if start == -1:
+              raise RuntimeError(
+                  "Premium send_invoice block not found."
+              )
+
+          end_marker = (
+              "\n        return"
+          )
+
+          end = source.find(
+              end_marker,
+              start,
+          )
+
+          if end == -1:
+              raise RuntimeError(
+                  "Premium invoice return not found."
+              )
+
+          original = source[start:end]
+
+          if "subscription_period" not in original:
+              raise RuntimeError(
+                  "Target send_invoice is not "
+                  "the Premium subscription invoice."
+              )
+
+          indented = "\n".join(
+              "    " + line
+              for line in original.splitlines()
+          )
+
+          replacement = (
+              '        # PREMIUM INVOICE DIAGNOSTIC\n'
+              '        print(\n'
+              '            "PREMIUM INVOICE START",\n'
+              '            user_id,\n'
+              '            premium_invoice["currency"],\n'
+              '            premium_invoice["prices"],\n'
+              '            premium_invoice["subscription_period"],\n'
+              '            flush=True,\n'
+              '        )\n'
+              '\n'
+              '        try:\n'
+              + indented
+              + '\n'
+              '            print(\n'
+              '                "PREMIUM INVOICE SENT",\n'
+              '                flush=True,\n'
+              '            )\n'
+              '        except Exception as error:\n'
+              '            print(\n'
+              '                "PREMIUM INVOICE ERROR:",\n'
+              '                repr(error),\n'
+              '                flush=True,\n'
+              '            )\n'
+              '\n'
+              '            try:\n'
+              '                bot.send_message(\n'
+              '                    message.chat.id,\n'
+              '                    (\n'
+              '                        "⚠️ Erreur temporaire lors de "\n'
+              '                        "la création de la facture Premium."\n'
+              '                        if language != "en"\n'
+              '                        else\n'
+              '                        "⚠️ Temporary error while creating "\n'
+              '                        "the Premium invoice."\n'
+              '                    ),\n'
+              '                )\n'
+              '            except Exception as notify_error:\n'
+              '                print(\n'
+              '                    "PREMIUM DIAGNOSTIC MESSAGE ERROR:",\n'
+              '                    repr(notify_error),\n'
+              '                    flush=True,\n'
+              '                )\n'
+          )
+
+          patched = (
+              source[:start]
+              + replacement
+              + source[end:]
+          )
+
+          path.write_text(
+              patched,
+              encoding="utf-8",
+          )
+
+          print(
+              "PREMIUM INVOICE DIAGNOSTIC PATCHED"
+          )
+          PY
+
+      - name: Compile bot
+        run: python -m py_compile bot.py
+
+      - name: Compile Premium stack
+        run: |
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_engine.py
+
+      - name: Verify diagnostic
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "PREMIUM INVOICE DIAGNOSTIC",
+              "PREMIUM INVOICE START",
+              "PREMIUM INVOICE SENT",
+              "PREMIUM INVOICE ERROR:",
+              "bot.send_invoice",
+              "subscription_period",
+              "build_premium_invoice",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("OK:", marker)
+
+          print("DIAGNOSTIC VERIFIED")
+          PY
+
+      - name: Verify Profile payment preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_profile_v2:",
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "init_profile_purchase_table",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("PROFILE OK:", marker)
+
+          print("PROFILE 390 STARS PRESERVED")
+          PY
+
+      - name: Verify only bot.py changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              ["git", "diff", "--name-only"],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = {
+              line.strip()
+              for line in result.stdout.splitlines()
+              if line.strip()
+          }
+
+          assert changed == {"bot.py"}, (
+              "Unexpected files changed: "
+              + repr(sorted(changed))
+          )
+
+          print("ONLY BOT.PY CHANGED")
+          PY
+
+      - name: Show diagnostic diff
+        run: git diff -- bot.py
+
+      - name: Commit Premium invoice diagnostic
+        run: |
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No bot.py changes."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Add Premium invoice diagnostics"
+          git push
