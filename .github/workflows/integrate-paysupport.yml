@@ -27,327 +27,42 @@ jobs:
           test -f premium_engine.py
           test -f premium_stars_payment.py
           test -f profile_purchase_engine.py
-
           echo "REQUIRED FILES OK"
 
       - name: Create payment support flow
         run: |
           cat > paysupport_flow.py <<'PY'
-          # ==================================================
-          # ASTROVIBE PAYMENT SUPPORT TELEGRAM FLOW
-          # ==================================================
-
           SUPPORT_CALLBACK_PREFIX = "paysupport:"
 
           SUPPORT_CATEGORIES = {
               "profile": {
-                  "fr": "✨ Profil Personnel",
-                  "en": "✨ Personal Profile",
-              },
-              "premium": {
-                  "fr": "💎 Premium",
-                  "en": "💎 Premium",
-              },
-              "payment": {
-                  "fr": "⭐ Paiement / Stars",
-                  "en": "⭐ Payment / Stars",
-              },
-              "subscription": {
-                  "fr": "🔄 Abonnement",
-                  "en": "🔄 Subscription",
-              },
-              "refund": {
-                  "fr": "↩️ Remboursement",
-                  "en": "↩️ Refund",
-              },
-              "other": {
-                  "fr": "❓ Autre",
-                  "en": "❓ Other",
-              },
-          }
-
-
-          def normalize_language(language):
-              if language == "en":
-                  return "en"
-
-              return "fr"
-
-
-          def get_support_intro(language="fr"):
-              language = normalize_language(
-                  language
-              )
-
-              if language == "en":
-                  return (
-                      "🆘 AstroVibe Payment Support\n\n"
-                      "What do you need help with?\n\n"
-                      "Choose a category below.\n\n"
-                      "AstroVibe can create a private "
-                      "support ticket without revealing "
-                      "a personal Telegram account."
-                  )
-
-              return (
-                  "🆘 Support paiement AstroVibe\n\n"
-                  "Avec quoi as-tu besoin d’aide ?\n\n"
-                  "Choisis une catégorie ci-dessous.\n\n"
-                  "AstroVibe peut créer un ticket de "
-                  "support privé sans révéler de compte "
-                  "Telegram personnel."
-              )
-
-
-          def get_category_label(
-              category,
-              language="fr",
-          ):
-              language = normalize_language(
-                  language
-              )
-
-              category_data = (
-                  SUPPORT_CATEGORIES.get(
-                      category
-                  )
-              )
-
-              if not category_data:
-                  return None
-
-              return category_data[
-                  language
-              ]
-
-
-          def get_category_from_callback(
-              callback_data,
-          ):
-              if not isinstance(
-                  callback_data,
-                  str,
-              ):
-                  return None
-
-              if not callback_data.startswith(
-                  SUPPORT_CALLBACK_PREFIX
-              ):
-                  return None
-
-              category = callback_data[
-                  len(SUPPORT_CALLBACK_PREFIX):
-              ]
-
-              if category not in (
-                  SUPPORT_CATEGORIES
-              ):
-                  return None
-
-              return category
-
-
-          def get_product_for_category(
-              category,
-          ):
-              if category == "profile":
-                  return "profile"
-
-              if category in {
-                  "premium",
-                  "subscription",
-              }:
-                  return "premium"
-
-              return None
-
-
-          def get_amount_for_category(
-              category,
-          ):
-              if category == "profile":
-                  return 390
-
-              if category in {
-                  "premium",
-                  "subscription",
-              }:
-                  return 199
-
-              return None
-
-
-          def get_description_prompt(
-              category,
-              language="fr",
-          ):
-              language = normalize_language(
-                  language
-              )
-
-              label = get_category_label(
-                  category,
-                  language,
-              )
-
-              if language == "en":
-                  return (
-                      f"{label}\n\n"
-                      "Describe the issue in one message.\n\n"
-                      "Please do not send passwords, "
-                      "Telegram login codes or other "
-                      "secret information."
-                  )
-
-              return (
-                  f"{label}\n\n"
-                  "Décris ton problème en un seul "
-                  "message.\n\n"
-                  "Ne transmets jamais de mot de passe, "
-                  "de code de connexion Telegram ou "
-                  "d’autre information secrète."
-              )
-
-
-          def get_support_error_text(
-              language="fr",
-          ):
-              language = normalize_language(
-                  language
-              )
-
-              if language == "en":
-                  return (
-                      "⚠️ AstroVibe could not create "
-                      "the support ticket right now.\n\n"
-                      "Please try /paysupport again "
-                      "in a few moments."
-                  )
-
-              return (
-                  "⚠️ AstroVibe n’a pas pu créer "
-                  "le ticket de support pour le "
-                  "moment.\n\n"
-                  "Réessaie /paysupport dans "
-                  "quelques instants."
-              )
-          PY
-
-      - name: Patch payment support into bot
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("bot.py")
-
-          source = path.read_text(
-              encoding="utf-8"
-          )
-
-          marker = (
-              "# ASTROVIBE PAYSUPPORT ROUTING"
-          )
-
-          if marker in source:
-              raise RuntimeError(
-                  "Payment support routing "
-                  "already installed."
-              )
-
-          menu_marker = (
-              "def menu(message):"
-          )
-
-          menu_position = source.find(
-              menu_marker
-          )
-
-          if menu_position == -1:
-              raise RuntimeError(
-                  "menu(message) router not found."
-              )
-
-          language_marker = (
-              "    language = "
-              "get_user_language(user_id)"
-          )
-
-          language_position = source.find(
-              language_marker,
-              menu_position,
-          )
-
-          if language_position == -1:
-              raise RuntimeError(
-                  "Language initialization "
-                  "not found in menu(message)."
-              )
-
-          terms_marker = (
-              "# TERMS ROUTING IN MAIN MENU"
-          )
-
-          terms_position = source.find(
-              terms_marker,
-              menu_position,
-          )
-
-          if terms_position == -1:
-              raise RuntimeError(
-                  "Terms routing marker not found."
-              )
-
-          paysupport_lines = [
-              "    # ASTROVIBE PAYSUPPORT ROUTING",
-              "    if command_name == \"/paysupport\":",
-              "        from paysupport_flow import (",
-              "            SUPPORT_CATEGORIES,",
-              "            get_category_label,",
-              "            get_support_intro,",
+                  "fr": "",
+              "        get_support_error_text,",
+              "    )",
+              "",
+              "    if (",
+              "        not isinstance(",
+              "            message.text,",
+              "            str,",
               "        )",
-              "",
-              "        support_markup = (",
-              "            types.InlineKeyboardMarkup()",
-              "        )",
-              "",
-              "        category_order = (",
-              "            \"profile\",",
-              "            \"premium\",",
-              "            \"payment\",",
-              "            \"subscription\",",
-              "            \"refund\",",
-              "            \"other\",",
-              "        )",
-              "",
-              "        for category in category_order:",
-              "            label = get_category_label(",
-              "                category,",
-              "                language,",
-              "            )",
-              "",
-              "            support_markup.add(",
-              "                types.InlineKeyboardButton(",
-              "                    text=label,",
-              "                    callback_data=(",
-              "                        \"paysupport:\"",
-              "                        + category",
-              "                    ),",
-              "                )",
-              "            )",
-              "",
+              "        or not message.text.strip()",
+              "    ):",
               "        bot.send_message(",
               "            message.chat.id,",
-              "            get_support_intro(language),",
-              "            reply_markup=support_markup,",
+              "            get_support_error_text(",
+              "                language",
+              "            ),",
               "        )",
-              "",
               "        return",
               "",
-          ]
-
-          paysupport_block = (
-              "\n".join(
-                 ()",
+              "    try:",
+              "        ticket = create_support_ticket(",
+              "            get_db_connection=(",
+              "                get_db_connection",
+              "            ),",
+              "            user_id=message.from_user.id,",
+              "            user_message=(",
+              "                message.text.strip()",
               "            ),",
               "            language=language,",
               "            category=category,",
@@ -392,8 +107,10 @@ jobs:
               "",
           ]
 
-          callback_block = "\n".join(
-              callback_block_lines
+          callback_block = (
+              "\n".join(
+                  callback_lines
+              )
           )
 
           insertion_marker = (
