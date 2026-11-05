@@ -1971,6 +1971,33 @@ def menu(message):
     )
 
         # ASTROVIBE PAYSUPPORT ROUTING
+    # ASTROVIBE SUPPORT ADMIN ROUTING
+    if command_name == "/supportreply":
+        from paysupport_admin import (
+            get_admin_resolution_text,
+            is_support_admin,
+            process_admin_reply,
+        )
+
+        if not is_support_admin(user_id):
+            return
+
+        admin_result = process_admin_reply(
+            bot=bot,
+            get_db_connection=get_db_connection,
+            admin_user_id=user_id,
+            command_text=message.text,
+        )
+
+        bot.send_message(
+            message.chat.id,
+            get_admin_resolution_text(
+                admin_result
+            ),
+        )
+
+        return
+
     if command_name == "/paysupport":
         from paysupport_flow import (
             get_category_label,
@@ -3743,6 +3770,42 @@ def create_paysupport_ticket(
                 get_amount(category)
             ),
         )
+
+        # ASTROVIBE SUPPORT HUMAN ESCALATION
+        from paysupport_admin import (
+            send_ticket_to_admin,
+        )
+
+        from paysupport_engine import (
+            escalate_ticket,
+            get_support_ticket,
+        )
+
+        escalated = escalate_ticket(
+            get_db_connection,
+            ticket["ticket_code"],
+        )
+
+        if escalated:
+            escalated_ticket = get_support_ticket(
+                get_db_connection,
+                ticket["ticket_code"],
+            )
+
+            if escalated_ticket:
+                admin_delivery = send_ticket_to_admin(
+                    bot,
+                    escalated_ticket,
+                )
+
+                if not admin_delivery.get(
+                    "success"
+                ):
+                    print(
+                        "PAYSUPPORT ADMIN DELIVERY FAILED:",
+                        admin_delivery.get("reason"),
+                        flush=True,
+                    )
 
         bot.send_message(
             message.chat.id,
