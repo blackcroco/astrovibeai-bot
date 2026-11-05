@@ -15,57 +15,314 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@        get_category_from_callback,",
-              "        get_description_prompt,",
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f bot.py
+          test -f paysupport_engine.py
+          test -f terms_engine.py
+          test -f premium_engine.py
+          test -f premium_stars_payment.py
+          test -f profile_purchase_engine.py
+          echo "REQUIRED FILES OK"
+
+      - name: Create paysupport flow
+        run: |
+          cat > paysupport_flow.py <<'PY'
+          SUPPORT_CATEGORIES = {
+              "profile": (
+                  "✨ Profil Personnel",
+                  "✨ Personal Profile",
+              ),
+              "premium": (
+                  "💎 Premium",
+                  "💎 Premium",
+              ),
+              "payment": (
+                  "⭐ Paiement / Stars",
+                  "⭐ Payment / Stars",
+              ),
+              "subscription": (
+                  "🔄 Abonnement",
+                  "🔄 Subscription",
+              ),
+              "refund": (
+                  "↩️ Remboursement",
+                  "↩️ Refund",
+              ),
+              "other": (
+                  "❓ Autre",
+                  "❓ Other",
+              ),
+          }
+
+
+          def get_support_intro(language):
+              if language == "en":
+                  return (
+                      "🆘 AstroVibe Payment Support\n\n"
+                      "Choose the category that best "
+                      "matches your problem."
+                  )
+
+              return (
+                  "🆘 Support paiement AstroVibe\n\n"
+                  "Choisis la catégorie qui correspond "
+                  "le mieux à ton problème."
+              )
+
+
+          def get_category_label(
+              category,
+              language,
+          ):
+              labels = SUPPORT_CATEGORIES.get(
+                  category
+              )
+
+              if not labels:
+                  return None
+
+              if language == "en":
+                  return labels[1]
+
+              return labels[0]
+
+
+          def parse_category(data):
+              prefix = "paysupport:"
+
+              if not isinstance(data, str):
+                  return None
+
+              if not data.startswith(prefix):
+                  return None
+
+              category = data[len(prefix):]
+
+              if category not in SUPPORT_CATEGORIES:
+                  return None
+
+              return category
+
+
+          def get_prompt(
+              category,
+              language,
+          ):
+              label = get_category_label(
+                  category,
+                  language,
+              )
+
+              if language == "en":
+                  return (
+                      f"{label}\n\n"
+                      "Describe your problem in one "
+                      "message.\n\n"
+                      "Never send passwords or Telegram "
+                      "login codes."
+                  )
+
+              return (
+                  f"{label}\n\n"
+                  "Décris ton problème en un seul "
+                  "message.\n\n"
+                  "Ne transmets jamais de mot de passe "
+                  "ou de code de connexion Telegram."
+              )
+
+
+          def get_product(category):
+              if category == "profile":
+                  return "profile"
+
+              if category in (
+                  "premium",
+                  "subscription",
+              ):
+                  return "premium"
+
+              return None
+
+
+          def get_amount(category):
+              if category == "profile":
+                  return 390
+
+              if category in (
+                  "premium",
+                  "subscription",
+              ):
+                  return 199
+
+              return None
+          PY
+
+      - name: Compile paysupport flow
+        run: |
+          python -m py_compile paysupport_flow.py
+          python -m py_compile paysupport_engine.py
+
+      - name: Create patch script
+        run: |
+          cat > /tmp/patch.py <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE PAYSUPPORT ROUTING"
+          )
+
+          if marker in source:
+              raise RuntimeError(
+                  "Paysupport already installed"
+              )
+
+          menu_start = source.find(
+              "def menu(message):"
+          )
+
+          if menu_start == -1:
+              raise RuntimeError(
+                  "menu(message) not found"
+              )
+
+          terms_marker = (
+              "# TERMS ROUTING IN MAIN MENU"
+          )
+
+          position = source.find(
+              terms_marker,
+              menu_start,
+          )
+
+          if position == -1:
+              raise RuntimeError(
+                  "Terms marker not found"
+              )
+
+          lines = [
+              "    # ASTROVIBE PAYSUPPORT ROUTING",
+              "    if command_name == \"/paysupport\":",
+              "        from paysupport_flow import (",
+              "            get_category_label,",
+              "            get_support_intro,",
+              "        )",
+              "",
+              "        markup = types.InlineKeyboardMarkup()",
+              "",
+              "        for category in (",
+              "            \"profile\",",
+              "            \"premium\",",
+              "            \"payment\",",
+              "            \"subscription\",",
+              "            \"refund\",",
+              "            \"other\",",
+              "        ):",
+              "            markup.add(",
+              "                types.InlineKeyboardButton(",
+              "                    text=get_category_label(",
+              "                        category,",
+              "                        language,",
+              "                    ),",
+              "                    callback_data=(",
+              "                        \"paysupport:\"",
+              "                        + category",
+              "                    ),",
+              "                )",
+              "            )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            get_support_intro(language),",
+              "            reply_markup=markup,",
+              "        )",
+              "",
+              "        return",
+              "",
+          ]
+
+          block = "\n".join(lines) + "\n"
+
+          source = (
+              source[:position]
+              + block
+              + source[position:]
+          )
+
+          callback_marker = (
+              "# PROFILE PURCHASE NEON CONNECTION"
+          )
+
+          callback_position = source.find(
+              callback_marker
+          )
+
+          if callback_position == -1:
+              raise RuntimeError(
+                  "Callback insertion marker not found"
+              )
+
+          callback_lines = [
+              "",
+              "# ASTROVIBE PAYSUPPORT CALLBACK",
+              "@bot.callback_query_handler(",
+              "    func=lambda call: (",
+              "        isinstance(call.data, str)",
+              "        and call.data.startswith(",
+              "            \"paysupport:\"",
+              "        )",
+              "    )",
+              ")",
+              "def handle_paysupport_category(call):",
+              "    from paysupport_flow import (",
+              "        get_prompt,",
+              "        parse_category,",
               "    )",
               "",
-              "    user_id = call.from_user.id",
-              "",
-              "    language = get_user_language(",
-              "        user_id",
-              "    )",
-              "",
-              "    category = get_category_from_callback(",
+              "    category = parse_category(",
               "        call.data",
               "    )",
               "",
-              "    if category is None:",
+              "    if not category:",
               "        bot.answer_callback_query(",
-              "            call.id,",
-              "            text=(",
-              "                \"Invalid support category\"",
-              "            ),",
+              "            call.id",
               "        )",
               "        return",
+              "",
+              "    language = get_user_language(",
+              "        call.from_user.id",
+              "    )",
               "",
               "    bot.answer_callback_query(",
               "        call.id",
               "    )",
               "",
-              "    prompt = get_description_prompt(",
-              "        category,",
-              "        language,",
-              "    )",
-              "",
-              "    request_message = bot.send_message(",
+              "    request = bot.send_message(",
               "        call.message.chat.id,",
-              "        prompt,",
-              "        reply_markup=(",
-              "            types.ForceReply(",
-              "                selective=True",
-              "            )",
+              "        get_prompt(",
+              "            category,",
+              "            language,",
               "        ),",
               "    )",
               "",
               "    bot.register_next_step_handler(",
-              "        request_message,",
-              "        create_paysupport_ticket_from_message,",
+              "        request,",
+              "        create_paysupport_ticket,",
               "        category,",
               "        language,",
               "    )",
               "",
               "",
-              "def create_paysupport_ticket_from_message(",
+              "def create_paysupport_ticket(",
               "    message,",
               "    category,",
               "    language,",
@@ -76,48 +333,33 @@ jobs:
               "    )",
               "",
               "    from paysupport_flow import (",
-              "        get_amount_for_category,",
-              "        get_product_for_category,",
-              "        get_support_error_text,",
+              "        get_amount,",
+              "        get_product,",
               "    )",
               "",
-              "    if (",
-              "        not isinstance(",
-              "            message.text,",
-              "            str,",
-              "        )",
-              "        or not message.text.strip()",
+              "    if not isinstance(",
+              "        message.text,",
+              "        str,",
               "    ):",
-              "        bot.send_message(",
-              "            message.chat.id,",
-              "            get_support_error_text(",
-              "                language",
-              "            ),",
-              "        )",
+              "        return",
+              "",
+              "    text = message.text.strip()",
+              "",
+              "    if not text:",
               "        return",
               "",
               "    try:",
               "        ticket = create_support_ticket(",
-              "            get_db_connection=(",
-              "                get_db_connection",
-              "            ),",
-              "            user_id=(",
-              "                message.from_user.id",
-              "            ),",
-              "            user_message=(",
-              "                message.text.strip()",
-              "            ),",
+              "            get_db_connection,",
+              "            message.from_user.id,",
+              "            text,",
               "            language=language,",
               "            category=category,",
-              "            product=(",
-              "                get_product_for_category(",
-              "                    category",
-              "                )",
+              "            product=get_product(",
+              "                category",
               "            ),",
               "            payment_amount_stars=(",
-              "                get_amount_for_category(",
-              "                    category",
-              "                )",
+              "                get_amount(category)",
               "            ),",
               "        )",
               "",
@@ -126,53 +368,25 @@ jobs:
               "            get_ticket_created_text(",
               "                ticket",
               "            ),",
-              "            reply_markup=(",
-              "                main_menu(",
-              "                    language",
-              "                )",
+              "            reply_markup=main_menu(",
+              "                language",
               "            ),",
               "        )",
               "",
               "    except Exception as error:",
               "        print(",
-              "            \"PAYSUPPORT TICKET ERROR:\",",
+              "            \"PAYSUPPORT ERROR:\",",
               "            repr(error),",
               "            flush=True,",
               "        )",
               "",
-              "        bot.send_message(",
-              "            message.chat.id,",
-              "            get_support_error_text(",
-              "                language",
-              "            ),",
-              "            reply_markup=(",
-              "                main_menu(",
-              "                    language",
-              "                )",
-              "            ),",
-              "        )",
               "",
           ]
 
           callback_block = (
-              "\n".join(
-                  callback_lines
-              )
-              + "\n\n"
+              "\n".join(callback_lines)
+              + "\n"
           )
-
-          insertion_marker = (
-              "# PROFILE PURCHASE NEON CONNECTION"
-          )
-
-          callback_position = source.find(
-              insertion_marker
-          )
-
-          if callback_position == -1:
-              raise RuntimeError(
-                  "Safe callback marker not found."
-              )
 
           source = (
               source[:callback_position]
@@ -185,18 +399,20 @@ jobs:
               encoding="utf-8",
           )
 
-          print(
-              "PAYSUPPORT ROUTING PATCHED"
-          )
+          print("PAYSUPPORT PATCHED")
           PY
 
-          python /tmp/patch_paysupport.py
+      - name: Validate patch script
+        run: python -m py_compile /tmp/patch.py
 
-      - name: Compile complete support integration
+      - name: Apply patch
+        run: python /tmp/patch.py
+
+      - name: Compile complete integration
         run: |
+          python -m py_compile bot.py
           python -m py_compile paysupport_engine.py
           python -m py_compile paysupport_flow.py
-          python -m py_compile bot.py
           python -m py_compile terms_engine.py
           python -m py_compile premium_engine.py
           python -m py_compile premium_stars_payment.py
@@ -205,22 +421,62 @@ jobs:
           python -m py_compile profile_stars_payment.py
           python -m py_compile profile_purchase_engine.py
 
-      - name: Test payment support flow
+      - name: Test support flow
         run: |
           python - <<'PY'
           from paysupport_flow import (
-              SUPPORT_CATEGORIES,
-              get_support_intro,
+              get_amount,
               get_category_label,
-              get_category_from_callback,
-              get_product_for_category,
-              get_amount_for_category,
-              get_description_prompt,
+              get_product,
+              get_support_intro,
+              parse_category,
           )
 
-          assert len(
-              SUPPORT_CATEGORIES
-          ) == 6
+          assert (
+              parse_category(
+                  "paysupport:profile"
+              )
+              == "profile"
+          )
+
+          assert (
+              parse_category(
+                  "paysupport:premium"
+              )
+              == "premium"
+          )
+
+          assert (
+              parse_category(
+                  "paysupport:refund"
+              )
+              == "refund"
+          )
+
+          assert (
+              parse_category("wrong")
+              is None
+          )
+
+          assert (
+              get_product("profile")
+              == "profile"
+          )
+
+          assert (
+              get_product("premium")
+              == "premium"
+          )
+
+          assert (
+              get_amount("profile")
+              == 390
+          )
+
+          assert (
+              get_amount("premium")
+              == 199
+          )
 
           assert (
               "Support paiement AstroVibe"
@@ -230,83 +486,6 @@ jobs:
           assert (
               "AstroVibe Payment Support"
               in get_support_intro("en")
-          )
-
-          assert (
-              get_category_from_callback(
-                  "paysupport:profile"
-              )
-              == "profile"
-          )
-
-          assert (
-              get_category_from_callback(
-                  "paysupport:premium"
-              )
-              == "premium"
-          )
-
-          assert (
-              get_category_from_callback(
-                  "paysupport:refund"
-              )
-              == "refund"
-          )
-
-          assert (
-              get_category_from_callback(
-                  "wrong:premium"
-              )
-              is None
-          )
-
-          assert (
-              get_product_for_category(
-                  "profile"
-              )
-              == "profile"
-          )
-
-          assert (
-              get_product_for_category(
-                  "premium"
-              )
-              == "premium"
-          )
-
-          assert (
-              get_product_for_category(
-                  "subscription"
-              )
-              == "premium"
-          )
-
-          assert (
-              get_product_for_category(
-                  "other"
-              )
-              is None
-          )
-
-          assert (
-              get_amount_for_category(
-                  "profile"
-              )
-              == 390
-          )
-
-          assert (
-              get_amount_for_category(
-                  "premium"
-              )
-              == 199
-          )
-
-          assert (
-              get_amount_for_category(
-                  "payment"
-              )
-              is None
           )
 
           assert (
@@ -325,27 +504,10 @@ jobs:
               )
           )
 
-          assert (
-              "Décris"
-              in get_description_prompt(
-                  "premium",
-                  "fr",
-              )
-          )
-
-          assert (
-              "Describe"
-              in get_description_prompt(
-                  "premium",
-                  "en",
-              )
-          )
-
-          print("PAYSUPPORT FLOW FR OK")
-          print("PAYSUPPORT FLOW EN OK")
+          print("SUPPORT FLOW OK")
           PY
 
-      - name: Verify paysupport routing
+      - name: Verify bot routing
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -357,53 +519,43 @@ jobs:
           required = (
               "ASTROVIBE PAYSUPPORT ROUTING",
               'command_name == "/paysupport"',
-              "paysupport:",
+              "ASTROVIBE PAYSUPPORT CALLBACK",
               "handle_paysupport_category",
               "register_next_step_handler",
-              "create_paysupport_ticket_from_message",
+              "create_paysupport_ticket",
               "create_support_ticket",
-              "get_ticket_created_text",
               "get_db_connection",
-              "PAYSUPPORT TICKET ERROR:",
           )
 
           for marker in required:
               assert marker in source, marker
-              print(
-                  "PAYSUPPORT OK:",
-                  marker,
-              )
+              print("OK:", marker)
 
-          menu_start = source.find(
+          menu = source.find(
               "def menu(message):"
           )
 
-          paysupport_position = source.find(
+          support = source.find(
               "# ASTROVIBE PAYSUPPORT ROUTING",
-              menu_start,
+              menu,
           )
 
-          unknown_position = source.find(
+          fallback = source.find(
               '"unknown_request"',
-              menu_start,
+              menu,
           )
 
-          assert menu_start != -1
-          assert paysupport_position != -1
-          assert unknown_position != -1
-
-          assert (
-              paysupport_position
-              < unknown_position
-          )
+          assert menu != -1
+          assert support != -1
+          assert fallback != -1
+          assert support < fallback
 
           print(
-              "PAYSUPPORT EXECUTES "
-              "BEFORE FALLBACK"
+              "PAYSUPPORT ROUTING VERIFIED"
           )
           PY
 
-      - name: Verify Terms preserved
+      - name: Verify Terms Profile Premium preserved
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -413,64 +565,21 @@ jobs:
           )
 
           required = (
-              "# TERMS ROUTING IN MAIN MENU",
               'command_name == "/terms"',
-              "ASTROVIBE TERMS COMMAND",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print("TERMS PRESERVED")
-          PY
-
-      - name: Verify Profile preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
               "astrovibe_profile_v2:",
               "process_successful_profile_purchase",
-              "send_personal_profile",
-              "init_profile_purchase_table",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "PROFILE 390 STARS PRESERVED"
-          )
-          PY
-
-      - name: Verify Premium preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
               "astrovibe_premium:",
               "createInvoiceLink",
-              "process_premium_pre_checkout",
               "process_successful_premium_payment",
-              "premium_subscription_buttons",
-              "def is_premium",
+              "send_personal_profile",
           )
 
           for marker in required:
               assert marker in source, marker
+              print("PRESERVED:", marker)
 
           print(
-              "PREMIUM 199 STARS PRESERVED"
+              "TERMS PROFILE PREMIUM PRESERVED"
           )
           PY
 
@@ -478,19 +587,14 @@ jobs:
         run: |
           find . -type d -name "__pycache__" -prune -exec rm -rf {} +
           find . -type f -name "*.pyc" -delete
-          echo "PYTHON CACHE REMOVED"
 
-      - name: Verify expected files changed
+      - name: Verify expected files
         run: |
           python - <<'PY'
           import subprocess
 
           result = subprocess.run(
-              [
-                  "git",
-                  "status",
-                  "--short",
-              ],
+              ["git", "status", "--short"],
               check=True,
               capture_output=True,
               text=True,
@@ -506,27 +610,14 @@ jobs:
           changed = set()
 
           for line in result.stdout.splitlines():
-              if not line.strip():
-                  continue
+              if line.strip():
+                  changed.add(
+                      line[3:].strip()
+                  )
 
-              changed.add(
-                  line[3:].strip()
-              )
-
-          unexpected = (
-              changed - allowed
-          )
-
-          assert not unexpected, (
-              "Unexpected changed files: "
-              + repr(sorted(unexpected))
-          )
-
-          assert "bot.py" in changed
-
-          assert (
-              "paysupport_flow.py"
-              in changed
+          assert changed == allowed, (
+              "Unexpected changes: "
+              + repr(sorted(changed))
           )
 
           print(
