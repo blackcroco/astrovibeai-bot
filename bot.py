@@ -1949,6 +1949,27 @@ def menu(message):
     user_id = message.from_user.id
     language = get_user_language(user_id)
 
+
+# TERMS ROUTING IN MAIN MENU
+    message_text = (
+        message.text.strip()
+        if isinstance(
+            message.text,
+            str,
+        )
+        else ""
+    )
+
+    command_name = (
+        message_text.split()[0]
+        if message_text
+        else ""
+    )
+
+    command_name = (
+        command_name.split("@")[0]
+    )
+
         # ASTROVIBE PAYSUPPORT ROUTING
     if command_name == "/paysupport":
         from paysupport_flow import (
@@ -1986,27 +2007,6 @@ def menu(message):
         )
 
         return
-
-# TERMS ROUTING IN MAIN MENU
-    message_text = (
-        message.text.strip()
-        if isinstance(
-            message.text,
-            str,
-        )
-        else ""
-    )
-
-    command_name = (
-        message_text.split()[0]
-        if message_text
-        else ""
-    )
-
-    command_name = (
-        command_name.split("@")[0]
-    )
-
     if command_name == "/terms":
         from terms_engine import (
             get_terms,
