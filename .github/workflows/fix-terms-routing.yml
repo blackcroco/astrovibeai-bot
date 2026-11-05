@@ -1,0 +1,428 @@
+name: Fix Terms Routing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-terms-routing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify current Terms integration
+        run: |
+          test -f bot.py
+          test -f terms_engine.py
+          test -f premium_engine.py
+          test -f premium_stars_payment.py
+          test -f profile_purchase_engine.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Patch Terms into main router
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          routing_marker = (
+              "# TERMS ROUTING IN MAIN MENU"
+          )
+
+          if routing_marker in source:
+              raise RuntimeError(
+                  "Terms routing already installed."
+              )
+
+          function_marker = (
+              "def menu(message):"
+          )
+
+          if function_marker not in source:
+              raise RuntimeError(
+                  "Main menu(message) router "
+                  "not found."
+              )
+
+          language_marker = (
+              "    language = "
+              "get_user_language(user_id)"
+          )
+
+          function_position = source.find(
+              function_marker
+          )
+
+          language_position = source.find(
+              language_marker,
+              function_position,
+          )
+
+          if language_position == -1:
+              raise RuntimeError(
+                  "Language initialization inside "
+                  "menu(message) not found."
+              )
+
+          insertion_position = (
+              language_position
+              + len(language_marker)
+          )
+
+          routing_block = '''
+
+    # TERMS ROUTING IN MAIN MENU
+    message_text = (
+        message.text.strip()
+        if isinstance(
+            message.text,
+            str,
+        )
+        else ""
+    )
+
+    command_name = (
+        message_text.split()[0]
+        if message_text
+        else ""
+    )
+
+    command_name = (
+        command_name.split("@")[0]
+    )
+
+    if command_name == "/terms":
+        from terms_engine import (
+            get_terms,
+            split_terms,
+        )
+
+        terms_text = get_terms(
+            language
+        )
+
+        for part in split_terms(
+            terms_text
+        ):
+            bot.send_message(
+                message.chat.id,
+                part,
+            )
+
+        return
+'''
+
+          source = (
+              source[:insertion_position]
+              + routing_block
+              + source[insertion_position:]
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8",
+          )
+
+          print(
+              "TERMS ROUTING PATCHED"
+          )
+          PY
+
+      - name: Compile AstroVibe
+        run: |
+          python -m py_compile terms_engine.py
+          python -m py_compile bot.py
+          python -m py_compile premium_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_purchase_engine.py
+
+      - name: Test Terms engine FR EN
+        run: |
+          python - <<'PY'
+          from terms_engine import (
+              get_terms,
+              split_terms,
+          )
+
+          fr = get_terms("fr")
+          en = get_terms("en")
+
+          assert (
+              "Conditions d’utilisation"
+              in fr
+          )
+
+          assert (
+              "Terms of Use"
+              in en
+          )
+
+          assert "390 ⭐" in fr
+          assert "199 ⭐" in fr
+          assert "390 ⭐" in en
+          assert "199 ⭐" in en
+
+          assert "/paysupport" in fr
+          assert "/paysupport" in en
+
+          for part in split_terms(fr):
+              assert len(part) <= 3900
+
+          for part in split_terms(en):
+              assert len(part) <= 3900
+
+          print("FR TERMS OK")
+          print("EN TERMS OK")
+          print("TERMS SPLITTING OK")
+          PY
+
+      - name: Verify Terms routing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          menu_start = source.find(
+              "def menu(message):"
+          )
+
+          assert menu_start != -1
+
+          unknown_position = source.find(
+              '"unknown_request"',
+              menu_start,
+          )
+
+          terms_position = source.find(
+              "# TERMS ROUTING IN MAIN MENU",
+              menu_start,
+          )
+
+          assert terms_position != -1
+
+          assert unknown_position != -1
+
+          assert (
+              terms_position
+              < unknown_position
+          ), (
+              "Terms routing must execute "
+              "before unknown_request"
+          )
+
+          required = (
+              'command_name == "/terms"',
+              "get_terms",
+              "split_terms",
+              "return",
+          )
+
+          router = source[
+              terms_position:
+              unknown_position
+          ]
+
+          for marker in required:
+              assert marker in router, marker
+              print(
+                  "ROUTING OK:",
+                  marker,
+              )
+
+          print(
+              "TERMS EXECUTES BEFORE FALLBACK"
+          )
+          PY
+
+      - name: Verify existing Terms handler preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "ASTROVIBE TERMS COMMAND",
+              'commands=["terms"]',
+              "terms_engine",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+
+          print(
+              "EXISTING TERMS INTEGRATION PRESERVED"
+          )
+          PY
+
+      - name: Verify Profile payment preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_profile_v2:",
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "init_profile_purchase_table",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print(
+                  "PROFILE OK:",
+                  marker,
+              )
+
+          print(
+              "PROFILE 390 STARS PRESERVED"
+          )
+          PY
+
+      - name: Verify Premium preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "astrovibe_premium:",
+              "createInvoiceLink",
+              "process_premium_pre_checkout",
+              "process_successful_premium_payment",
+              "premium_subscription_buttons",
+              "def is_premium",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print(
+                  "PREMIUM OK:",
+                  marker,
+              )
+
+          print(
+              "PREMIUM 199 STARS PRESERVED"
+          )
+          PY
+
+      - name: Verify main menu systems preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "horoscope_buttons",
+              "compatibility_buttons",
+              "bonus_buttons",
+              "points_buttons",
+              "language_buttons",
+              "premium_subscription_buttons",
+              "unknown_request",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print(
+                  "MENU OK:",
+                  marker,
+              )
+
+          print(
+              "MAIN ROUTER PRESERVED"
+          )
+          PY
+
+      - name: Remove Python cache
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Verify only bot.py changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = {
+              line.strip()
+              for line
+              in result.stdout.splitlines()
+              if line.strip()
+          }
+
+          assert changed == {
+              "bot.py"
+          }, (
+              "Unexpected changed files: "
+              + repr(sorted(changed))
+          )
+
+          print(
+              "ONLY BOT.PY CHANGED"
+          )
+          PY
+
+      - name: Show bot.py changes
+        run: git diff -- bot.py
+
+      - name: Commit Terms routing fix
+        run: |
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No bot.py changes."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Fix Terms command routing"
+          git push
