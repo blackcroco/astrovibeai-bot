@@ -2999,6 +2999,20 @@ def menu(message):
             "✨ Mon Profil AstroVibe",
             "✨ My AstroVibe Profile",
         ):
+            # PERMANENT PROFILE ACCESS
+            from profile_purchase_engine import (
+                has_purchased_profile,
+            )
+
+            if has_purchased_profile(
+                get_db_connection,
+                message.from_user.id,
+            ):
+                send_personal_profile(
+                    message
+                )
+                return
+
             if language == "en":
                 offer_text = (
                     "✨ YOUR ASTROVIBE PERSONAL PROFILE\n\n"
@@ -3222,12 +3236,25 @@ def astro_profile_successful_payment(message):
         process_successful_profile_purchase,
     )
 
-    process_successful_profile_purchase(
+    result = process_successful_profile_purchase(
         bot=bot,
         message=message,
         language=language,
         connection_factory=get_db_connection,
     )
+
+    if (
+        result
+        and result.get("valid")
+        and (
+            result.get("recorded")
+            or result.get("already_owned")
+            or result.get("duplicate_charge")
+        )
+    ):
+        send_personal_profile(
+            message
+        )
 
 
 # ============================================
