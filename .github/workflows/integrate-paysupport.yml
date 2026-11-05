@@ -15,28 +15,69 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Verify required files
-        run: |
-          test -f bot.py
-          test -f paysupport_engine.py
-          test -f terms_engine.py
-          test -f premium_engine.py
-          test -f premium_stars_payment.py
-          test -f profile_purchase_engine.py
-          echo "REQUIRED FILES OK"
-
-      - name: Create payment support flow
-        run: |
-          cat > paysupport_flow.py <<'PY'
-          SUPPORT_CALLBACK_PREFIX = "paysupport:"
-
-          SUPPORT_CATEGORIES = {
-              "profile": {
-                  "fr": "",
+        uses: actions/setup-python@        get_category_from_callback,",
+              "        get_description_prompt,",
+              "    )",
+              "",
+              "    user_id = call.from_user.id",
+              "",
+              "    language = get_user_language(",
+              "        user_id",
+              "    )",
+              "",
+              "    category = get_category_from_callback(",
+              "        call.data",
+              "    )",
+              "",
+              "    if category is None:",
+              "        bot.answer_callback_query(",
+              "            call.id,",
+              "            text=(",
+              "                \"Invalid support category\"",
+              "            ),",
+              "        )",
+              "        return",
+              "",
+              "    bot.answer_callback_query(",
+              "        call.id",
+              "    )",
+              "",
+              "    prompt = get_description_prompt(",
+              "        category,",
+              "        language,",
+              "    )",
+              "",
+              "    request_message = bot.send_message(",
+              "        call.message.chat.id,",
+              "        prompt,",
+              "        reply_markup=(",
+              "            types.ForceReply(",
+              "                selective=True",
+              "            )",
+              "        ),",
+              "    )",
+              "",
+              "    bot.register_next_step_handler(",
+              "        request_message,",
+              "        create_paysupport_ticket_from_message,",
+              "        category,",
+              "        language,",
+              "    )",
+              "",
+              "",
+              "def create_paysupport_ticket_from_message(",
+              "    message,",
+              "    category,",
+              "    language,",
+              "):",
+              "    from paysupport_engine import (",
+              "        create_support_ticket,",
+              "        get_ticket_created_text,",
+              "    )",
+              "",
+              "    from paysupport_flow import (",
+              "        get_amount_for_category,",
+              "        get_product_for_category,",
               "        get_support_error_text,",
               "    )",
               "",
@@ -60,7 +101,9 @@ jobs:
               "            get_db_connection=(",
               "                get_db_connection",
               "            ),",
-              "            user_id=message.from_user.id,",
+              "            user_id=(",
+              "                message.from_user.id",
+              "            ),",
               "            user_message=(",
               "                message.text.strip()",
               "            ),",
@@ -83,8 +126,10 @@ jobs:
               "            get_ticket_created_text(",
               "                ticket",
               "            ),",
-              "            reply_markup=main_menu(",
-              "                language",
+              "            reply_markup=(",
+              "                main_menu(",
+              "                    language",
+              "                )",
               "            ),",
               "        )",
               "",
@@ -100,8 +145,10 @@ jobs:
               "            get_support_error_text(",
               "                language",
               "            ),",
-              "            reply_markup=main_menu(",
-              "                language",
+              "            reply_markup=(",
+              "                main_menu(",
+              "                    language",
+              "                )",
               "            ),",
               "        )",
               "",
@@ -111,6 +158,7 @@ jobs:
               "\n".join(
                   callback_lines
               )
+              + "\n\n"
           )
 
           insertion_marker = (
@@ -123,14 +171,12 @@ jobs:
 
           if callback_position == -1:
               raise RuntimeError(
-                  "Safe callback insertion "
-                  "marker not found."
+                  "Safe callback marker not found."
               )
 
           source = (
               source[:callback_position]
               + callback_block
-              + "\n\n"
               + source[callback_position:]
           )
 
@@ -144,11 +190,20 @@ jobs:
           )
           PY
 
-      - name: Compile support integration
+          python /tmp/patch_paysupport.py
+
+      - name: Compile complete support integration
         run: |
           python -m py_compile paysupport_engine.py
           python -m py_compile paysupport_flow.py
           python -m py_compile bot.py
+          python -m py_compile terms_engine.py
+          python -m py_compile premium_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_purchase_engine.py
 
       - name: Test payment support flow
         run: |
@@ -189,6 +244,13 @@ jobs:
                   "paysupport:premium"
               )
               == "premium"
+          )
+
+          assert (
+              get_category_from_callback(
+                  "paysupport:refund"
+              )
+              == "refund"
           )
 
           assert (
@@ -350,20 +412,14 @@ jobs:
               encoding="utf-8"
           )
 
-          assert (
-              "# TERMS ROUTING IN MAIN MENU"
-              in source
+          required = (
+              "# TERMS ROUTING IN MAIN MENU",
+              'command_name == "/terms"',
+              "ASTROVIBE TERMS COMMAND",
           )
 
-          assert (
-              'command_name == "/terms"'
-              in source
-          )
-
-          assert (
-              "ASTROVIBE TERMS COMMAND"
-              in source
-          )
+          for marker in required:
+              assert marker in source, marker
 
           print("TERMS PRESERVED")
           PY
@@ -422,7 +478,6 @@ jobs:
         run: |
           find . -type d -name "__pycache__" -prune -exec rm -rf {} +
           find . -type f -name "*.pyc" -delete
-
           echo "PYTHON CACHE REMOVED"
 
       - name: Verify expected files changed
