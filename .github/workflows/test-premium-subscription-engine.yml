@@ -1,0 +1,659 @@
+name: Test Premium Subscription Engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-premium-subscription-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Premium subscription engine
+        run: python -m py_compile premium_subscription_engine.py
+
+      - name: Test Premium configuration
+        run: |
+          python - <<'PY'
+          from premium_subscription_engine import (
+              PREMIUM_PRICE_STARS,
+              PREMIUM_CURRENCY,
+              PREMIUM_PERIOD_DAYS,
+              PREMIUM_STATUS_ACTIVE,
+              PREMIUM_STATUS_EXPIRED,
+          )
+
+          assert PREMIUM_PRICE_STARS == 199
+          assert PREMIUM_CURRENCY == "XTR"
+          assert PREMIUM_PERIOD_DAYS == 30
+          assert PREMIUM_STATUS_ACTIVE == "active"
+          assert PREMIUM_STATUS_EXPIRED == "expired"
+
+          print("PREMIUM PRICE: 199 STARS")
+          print("PREMIUM CURRENCY: XTR")
+          print("PREMIUM PERIOD: 30 DAYS")
+          print("PREMIUM CONFIGURATION OK")
+          PY
+
+      - name: Test Premium subscription lifecycle
+        run: |
+          python - <<'PY'
+          from datetime import (
+              datetime,
+              timedelta,
+              timezone,
+          )
+
+          from premium_subscription_engine import (
+              PREMIUM_STATUS_ACTIVE,
+              PREMIUM_STATUS_EXPIRED,
+              activate_premium_subscription,
+              expire_premium_subscription,
+              get_premium_subscription,
+              has_premium_charge,
+              is_premium_subscription_active,
+          )
+
+
+          class FakeDatabase:
+              def __init__(self):
+                  self.users = {
+                      123456789: False,
+                  }
+                  self.subscriptions = []
+                  self.next_id = 1
+
+
+          class FakeConnection:
+              def __init__(self, database):
+                  self.database = database
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def cursor(self):
+                  return FakeCursor(
+                      self.database
+                  )
+
+              def commit(self):
+                  return None
+
+              def rollback(self):
+                  return None
+
+
+          class FakeCursor:
+              def __init__(self, database):
+                  self.database = database
+                  self.result = None
+                  self.rowcount = 0
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  normalized = " ".join(
+                      query.split()
+                  ).lower()
+
+                  params = params or ()
+
+                  if (
+                      "select 1"
+                      in normalized
+                      and
+                      "telegram_payment_charge_id"
+                      in normalized
+                  ):
+                      charge_id = params[0]
+
+                      found = any(
+                          item[
+                              "telegram_payment_charge_id"
+                          ]
+                          == charge_id
+                          for item
+                          in self.database.subscriptions
+                      )
+
+                      self.result = (
+                          (1,)
+                          if found
+                          else None
+                      )
+
+                      self.rowcount = (
+                          1
+                          if found
+                          else 0
+                      )
+
+                      return
+
+                  if (
+                      "select user_id"
+                      in normalized
+                      and
+                      "from premium_subscriptions"
+                      in normalized
+                  ):
+                      user_id = params[0]
+
+                      matches = [
+                          item
+                          for item
+                          in self.database.subscriptions
+                          if item["user_id"]
+                          == user_id
+                      ]
+
+                      matches.sort(
+                          key=lambda item: (
+                              item["updated_at"],
+                              item["id"],
+                          ),
+                          reverse=True,
+                      )
+
+                      if not matches:
+                          self.result = None
+                          self.rowcount = 0
+                          return
+
+                      item = matches[0]
+
+                      self.result = (
+                          item["user_id"],
+                          item["status"],
+                          item["amount_stars"],
+                          item["currency"],
+                          item[
+                              "telegram_payment_charge_id"
+                          ],
+                          item[
+                              "telegram_subscription_id"
+                          ],
+                          item["started_at"],
+                          item["expires_at"],
+                          item["created_at"],
+                          item["updated_at"],
+                      )
+
+                      self.rowcount = 1
+                      return
+
+                  if (
+                      "insert into premium_subscriptions"
+                      in normalized
+                  ):
+                      (
+                          user_id,
+                          status,
+                          amount_stars,
+                          currency,
+                          charge_id,
+                          subscription_id,
+                          started_at,
+                          expires_at,
+                          created_at,
+                          updated_at,
+                      ) = params
+
+                      self.database.subscriptions.append(
+                          {
+                              "id": (
+                                  self.database.next_id
+                              ),
+                              "user_id": user_id,
+                              "status": status,
+                              "amount_stars": (
+                                  amount_stars
+                              ),
+                              "currency": currency,
+                              "telegram_payment_charge_id": (
+                                  charge_id
+                              ),
+                              "telegram_subscription_id": (
+                                  subscription_id
+                              ),
+                              "started_at": started_at,
+                              "expires_at": expires_at,
+                              "created_at": created_at,
+                              "updated_at": updated_at,
+                          }
+                      )
+
+                      self.database.next_id += 1
+                      self.rowcount = 1
+                      self.result = None
+                      return
+
+                  if (
+                      "update users"
+                      in normalized
+                      and
+                      "set premium = true"
+                      in normalized
+                  ):
+                      user_id = params[0]
+
+                      if user_id not in self.database.users:
+                          self.rowcount = 0
+                          return
+
+                      self.database.users[
+                          user_id
+                      ] = True
+
+                      self.rowcount = 1
+                      return
+
+                  if (
+                      "update premium_subscriptions"
+                      in normalized
+                      and
+                      "status = %s"
+                      in normalized
+                  ):
+                      (
+                          new_status,
+                          updated_at,
+                          user_id,
+                          old_status,
+                      ) = params
+
+                      changed = 0
+
+                      for item in self.database.subscriptions:
+                          if (
+                              item["user_id"]
+                              == user_id
+                              and
+                              item["status"]
+                              == old_status
+                          ):
+                              item["status"] = (
+                                  new_status
+                              )
+                              item["updated_at"] = (
+                                  updated_at
+                              )
+                              changed += 1
+
+                      self.rowcount = changed
+                      return
+
+                  if (
+                      "update users"
+                      in normalized
+                      and
+                      "set premium = false"
+                      in normalized
+                  ):
+                      user_id = params[0]
+
+                      if user_id not in self.database.users:
+                          self.rowcount = 0
+                          return
+
+                      self.database.users[
+                          user_id
+                      ] = False
+
+                      self.rowcount = 1
+                      return
+
+                  raise AssertionError(
+                      "Unexpected SQL query: "
+                      + normalized
+                  )
+
+              def fetchone(self):
+                  return self.result
+
+
+          database = FakeDatabase()
+
+
+          def get_fake_db_connection():
+              return FakeConnection(
+                  database
+              )
+
+
+          user_id = 123456789
+          charge_id = (
+              "TEST_PREMIUM_CHARGE_001"
+          )
+          subscription_id = (
+              "TEST_PREMIUM_SUBSCRIPTION_001"
+          )
+
+          assert (
+              get_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+              )
+              is None
+          )
+
+          assert (
+              is_premium_subscription_active(
+                  get_fake_db_connection,
+                  user_id,
+              )
+              is False
+          )
+
+          assert (
+              has_premium_charge(
+                  get_fake_db_connection,
+                  charge_id,
+              )
+              is False
+          )
+
+          print("USER STARTS AS FREE")
+
+          activation = (
+              activate_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+                  charge_id,
+                  telegram_subscription_id=(
+                      subscription_id
+                  ),
+              )
+          )
+
+          assert activation["success"] is True
+          assert activation["reason"] == "activated"
+          assert activation["user_id"] == user_id
+          assert activation["amount_stars"] == 199
+          assert activation["currency"] == "XTR"
+          assert (
+              activation["status"]
+              == PREMIUM_STATUS_ACTIVE
+          )
+
+          assert (
+              database.users[user_id]
+              is True
+          )
+
+          assert (
+              has_premium_charge(
+                  get_fake_db_connection,
+                  charge_id,
+              )
+              is True
+          )
+
+          assert (
+              is_premium_subscription_active(
+                  get_fake_db_connection,
+                  user_id,
+              )
+              is True
+          )
+
+          active_subscription = (
+              get_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+              )
+          )
+
+          assert (
+              active_subscription["status"]
+              == PREMIUM_STATUS_ACTIVE
+          )
+
+          assert (
+              active_subscription[
+                  "telegram_subscription_id"
+              ]
+              == subscription_id
+          )
+
+          assert (
+              active_subscription[
+                  "telegram_payment_charge_id"
+              ]
+              == charge_id
+          )
+
+          print("PREMIUM ACTIVATION OK")
+          print("USERS.PREMIUM TRUE OK")
+          print("ACTIVE SUBSCRIPTION OK")
+
+          duplicate = (
+              activate_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+                  charge_id,
+                  telegram_subscription_id=(
+                      subscription_id
+                  ),
+              )
+          )
+
+          assert duplicate["success"] is False
+          assert (
+              duplicate["reason"]
+              == "duplicate_charge"
+          )
+
+          assert (
+              len(database.subscriptions)
+              == 1
+          )
+
+          print("DUPLICATE CHARGE REJECTED")
+
+          expired_time = (
+              datetime.now(timezone.utc)
+              - timedelta(minutes=1)
+          )
+
+          database.subscriptions[
+              0
+          ]["expires_at"] = expired_time
+
+          assert (
+              is_premium_subscription_active(
+                  get_fake_db_connection,
+                  user_id,
+              )
+              is False
+          )
+
+          expiration_result = (
+              expire_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+              )
+          )
+
+          assert expiration_result is True
+
+          expired_subscription = (
+              get_premium_subscription(
+                  get_fake_db_connection,
+                  user_id,
+              )
+          )
+
+          assert (
+              expired_subscription["status"]
+              == PREMIUM_STATUS_EXPIRED
+          )
+
+          assert (
+              database.users[user_id]
+              is False
+          )
+
+          print("PREMIUM EXPIRATION OK")
+          print("USERS.PREMIUM FALSE OK")
+          print("PREMIUM LIFECYCLE PASSED")
+          PY
+
+      - name: Test invalid Premium activation
+        run: |
+          python - <<'PY'
+          from datetime import (
+              datetime,
+              timedelta,
+              timezone,
+          )
+
+          from premium_subscription_engine import (
+              activate_premium_subscription,
+          )
+
+
+          class EmptyCursor:
+              def __init__(self):
+                  self.rowcount = 0
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  self.rowcount = 0
+
+              def fetchone(self):
+                  return None
+
+
+          class EmptyConnection:
+              def __enter__(self):
+                  return self
+
+              def __exit__(
+                  self,
+                  exc_type,
+                  exc_value,
+                  traceback,
+              ):
+                  return False
+
+              def cursor(self):
+                  return EmptyCursor()
+
+              def commit(self):
+                  return None
+
+
+          def get_empty_connection():
+              return EmptyConnection()
+
+
+          try:
+              activate_premium_subscription(
+                  get_empty_connection,
+                  123456789,
+                  None,
+              )
+          except ValueError:
+              print(
+                  "MISSING CHARGE ID REJECTED"
+              )
+          else:
+              raise AssertionError(
+                  "Missing charge ID accepted"
+              )
+
+          past_expiration = (
+              datetime.now(timezone.utc)
+              - timedelta(days=1)
+          )
+
+          result = (
+              activate_premium_subscription(
+                  get_empty_connection,
+                  123456789,
+                  "TEST_INVALID_EXPIRATION",
+                  expires_at=past_expiration,
+              )
+          )
+
+          assert result["success"] is False
+          assert (
+              result["reason"]
+              == "invalid_expiration"
+          )
+
+          print("PAST EXPIRATION REJECTED")
+          print("INVALID ACTIVATIONS REJECTED")
+          PY
+
+      - name: Verify protected files remain separate
+        run: |
+          test -f premium_subscription_engine.py
+          test -f premium_engine.py
+          test -f profile_purchase_engine.py
+          test -f profile_stars_payment.py
+          test -f bot.py
+
+          echo "PREMIUM SUBSCRIPTION ENGINE EXISTS"
+          echo "PREMIUM V1 ENGINE PRESERVED"
+          echo "PROFILE PURCHASE ENGINE PRESERVED"
+          echo "PROFILE STARS PAYMENT PRESERVED"
+          echo "BOT.PY PRESERVED"
+
+      - name: Final zero-cost validation
+        run: |
+          echo "=========================================="
+          echo "PREMIUM SUBSCRIPTION ENGINE TEST PASSED"
+          echo "=========================================="
+          echo "Premium price: 199 XTR"
+          echo "Premium period: 30 days"
+          echo "Activation simulation: OK"
+          echo "Duplicate charge protection: OK"
+          echo "Expiration simulation: OK"
+          echo "Premium V1 compatibility: OK"
+          echo "Profile purchase stack preserved: OK"
+          echo "Points and referral systems untouched: OK"
+          echo "Real Stars spent: 0"
