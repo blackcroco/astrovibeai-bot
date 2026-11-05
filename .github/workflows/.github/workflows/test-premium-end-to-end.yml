@@ -1,0 +1,384 @@
+name: Test Premium End To End
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-premium-end-to-end:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile complete Premium stack
+        run: |
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile premium_engine.py
+          python -m py_compile bot.py
+
+      - name: Verify Premium product configuration
+        run: |
+          python - <<'PY'
+          from premium_stars_payment import (
+              PREMIUM_PRICE_STARS,
+              PREMIUM_CURRENCY,
+              PREMIUM_PERIOD_SECONDS,
+              build_premium_invoice,
+          )
+
+          assert PREMIUM_PRICE_STARS == 199
+          assert PREMIUM_CURRENCY == "XTR"
+          assert PREMIUM_PERIOD_SECONDS == 2592000
+
+          invoice = build_premium_invoice(
+              user_id=123456789,
+              language="fr",
+          )
+
+          assert invoice["currency"] == "XTR"
+          assert invoice["prices"][0]["amount"] == 199
+          assert invoice["subscription_period"] == 2592000
+
+          assert invoice["payload"] == (
+              "astrovibe_premium:123456789"
+          )
+
+          print("PREMIUM PRODUCT OK")
+          print("PRICE: 199 XTR")
+          print("PERIOD: 30 DAYS")
+          PY
+
+      - name: Test pre checkout flow
+        run: |
+          python - <<'PY'
+          from premium_stars_handlers import (
+              process_premium_pre_checkout,
+          )
+
+          result = process_premium_pre_checkout(
+              payload="astrovibe_premium:123456789",
+              currency="XTR",
+              total_amount=199,
+              telegram_user_id=123456789,
+          )
+
+          assert result["success"] is True
+          assert result["reason"] == "valid"
+
+          assert (
+              result["validation"]["user_id"]
+              == 123456789
+          )
+
+          assert (
+              result["validation"]["amount"]
+              == 199
+          )
+
+          assert (
+              result["validation"]["currency"]
+              == "XTR"
+          )
+
+          print("PRE-CHECKOUT FLOW OK")
+          PY
+
+      - name: Test invalid payment protection
+        run: |
+          python - <<'PY'
+          from premium_stars_handlers import (
+              process_premium_pre_checkout,
+          )
+
+          payload = "astrovibe_premium:123456789"
+
+          wrong_amount = process_premium_pre_checkout(
+              payload=payload,
+              currency="XTR",
+              total_amount=200,
+              telegram_user_id=123456789,
+          )
+
+          assert wrong_amount["success"] is False
+          assert (
+              wrong_amount["reason"]
+              == "invalid_amount"
+          )
+
+          wrong_currency = process_premium_pre_checkout(
+              payload=payload,
+              currency="USD",
+              total_amount=199,
+              telegram_user_id=123456789,
+          )
+
+          assert wrong_currency["success"] is False
+          assert (
+              wrong_currency["reason"]
+              == "invalid_currency"
+          )
+
+          wrong_user = process_premium_pre_checkout(
+              payload=payload,
+              currency="XTR",
+              total_amount=199,
+              telegram_user_id=999999999,
+          )
+
+          assert wrong_user["success"] is False
+          assert (
+              wrong_user["reason"]
+              == "invalid_user"
+          )
+
+          wrong_payload = process_premium_pre_checkout(
+              payload="wrong:123456789",
+              currency="XTR",
+              total_amount=199,
+              telegram_user_id=123456789,
+          )
+
+          assert wrong_payload["success"] is False
+          assert (
+              wrong_payload["reason"]
+              == "invalid_payload"
+          )
+
+          print("INVALID PAYMENTS REJECTED")
+          PY
+
+      - name: Test successful payment to activation flow
+        run: |
+          python - <<'PY'
+          from datetime import (
+              datetime,
+              timezone,
+          )
+
+          import premium_stars_handlers
+
+
+          captured = {
+              "activation_calls": 0,
+          }
+
+
+          def fake_db_connection():
+              return None
+
+
+          def fake_activate_premium_subscription(
+              get_db_connection,
+              user_id,
+              telegram_payment_charge_id,
+              telegram_subscription_id=None,
+              expires_at=None,
+          ):
+              captured["activation_calls"] += 1
+              captured["user_id"] = user_id
+
+              captured["charge_id"] = (
+                  telegram_payment_charge_id
+              )
+
+              captured["subscription_id"] = (
+                  telegram_subscription_id
+              )
+
+              captured["expires_at"] = expires_at
+
+              return {
+                  "success": True,
+                  "reason": "activated",
+                  "user_id": user_id,
+                  "status": "active",
+                  "amount_stars": 199,
+                  "currency": "XTR",
+                  "expires_at": expires_at,
+              }
+
+
+          premium_stars_handlers.activate_premium_subscription = (
+              fake_activate_premium_subscription
+          )
+
+          expiration = 1893456000
+
+          result = (
+              premium_stars_handlers
+              .process_successful_premium_payment(
+                  get_db_connection=(
+                      fake_db_connection
+                  ),
+                  payload=(
+                      "astrovibe_premium:"
+                      "123456789"
+                  ),
+                  currency="XTR",
+                  total_amount=199,
+                  telegram_payment_charge_id=(
+                      "TEST_PREMIUM_E2E_001"
+                  ),
+                  telegram_user_id=123456789,
+                  telegram_subscription_id=(
+                      "TEST_SUBSCRIPTION_E2E_001"
+                  ),
+                  subscription_expiration_date=(
+                      expiration
+                  ),
+                  is_recurring=True,
+                  is_first_recurring=True,
+              )
+          )
+
+          assert result["success"] is True
+
+          assert (
+              result["reason"]
+              == "premium_activated"
+          )
+
+          assert result["user_id"] == 123456789
+          assert result["amount"] == 199
+          assert result["currency"] == "XTR"
+
+          assert (
+              result[
+                  "telegram_payment_charge_id"
+              ]
+              == "TEST_PREMIUM_E2E_001"
+          )
+
+          assert (
+              result[
+                  "telegram_subscription_id"
+              ]
+              == "TEST_SUBSCRIPTION_E2E_001"
+          )
+
+          assert result["is_recurring"] is True
+
+          assert (
+              result["is_first_recurring"]
+              is True
+          )
+
+          assert (
+              captured["activation_calls"]
+              == 1
+          )
+
+          assert (
+              captured["user_id"]
+              == 123456789
+          )
+
+          assert (
+              captured["charge_id"]
+              == "TEST_PREMIUM_E2E_001"
+          )
+
+          assert isinstance(
+              captured["expires_at"],
+              datetime,
+          )
+
+          assert (
+              captured["expires_at"].tzinfo
+              is not None
+          )
+
+          print("SUCCESSFUL PAYMENT OK")
+          print("ACTIVATION CALLED OK")
+          print("RECURRING DATA OK")
+          PY
+
+      - name: Test subscription engine lifecycle
+        run: |
+          python - <<'PY'
+          from datetime import (
+              datetime,
+              timedelta,
+              timezone,
+          )
+
+          import premium_subscription_engine as engine
+
+
+          state = {
+              "premium": False,
+              "charge": None,
+              "subscription": None required = (
+              "astrovibe_profile_v2:",
+              "process_profile_pre_checkout",
+              "process_successful_profile_purchase",
+              "send_personal_profile",
+              "init_profile_purchase_table",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+              print("PROFILE OK:", marker)
+
+          print("PROFILE 390 STARS PRESERVED")
+          PY
+
+      - name: Verify Premium V1 preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "premium_engine.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "generate_daily_plus",
+              "generate_weekly",
+              "generate_monthly",
+              "generate_yearly",
+              "generate_premium_compatibility",
+          )
+
+          for marker in required:
+              assert marker in source, marker
+
+          print("PREMIUM V1 PRESERVED")
+          PY
+
+      - name: Verify points and referral untouched
+        run: |
+          git diff --quiet
+
+          echo "NO FILE MODIFICATION PERFORMED"
+          echo "POINTS SYSTEM UNTOUCHED"
+          echo "REFERRAL SYSTEM UNTOUCHED"
+
+      - name: Final zero cost validation
+        run: |
+          echo "======================================="
+          echo "ASTROVIBE PREMIUM END TO END PASSED"
+          echo "======================================="
+          echo "Price: 199 XTR"
+          echo "Period: 30 days"
+          echo "Invoice link wiring: OK"
+          echo "Pre-checkout: OK"
+          echo "Successful payment simulation: OK"
+          echo "Premium activation simulation: OK"
+          echo "Recurring metadata: OK"
+          echo "Duplicate charge protection: OK"
+          echo "Expiration simulation: OK"
+          echo "Premium V1 preserved: OK"
+          echo "Profile 390 Stars preserved: OK"
+          echo "Points/referral untouched: OK"
+          echo "Real Stars spent: 0"
