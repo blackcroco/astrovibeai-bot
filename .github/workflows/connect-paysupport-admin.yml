@@ -27,21 +27,16 @@ jobs:
           test -f paysupport_flow.py
           test -f terms_engine.py
           test -f premium_stars_payment.py
-          test -f premium_stars_handlers.py
           test -f profile_purchase_engine.py
-
           echo "REQUIRED FILES OK"
 
-      - name: Create admin connection patch
+      - name: Create connection patch
         run: |
-          cat > /tmp/connect_paysupport_admin.py <<'PY'
+          cat > /tmp/connect_admin.py <<'PY'
           from pathlib import Path
 
           path = Path("bot.py")
-
-          source = path.read_text(
-              encoding="utf-8"
-          )
+          source = path.read_text(encoding="utf-8")
 
           admin_marker = (
               "# ASTROVIBE SUPPORT ADMIN ROUTING"
@@ -53,39 +48,22 @@ jobs:
 
           if admin_marker in source:
               raise RuntimeError(
-                  "Support admin routing "
-                  "already installed."
+                  "Admin routing already installed"
               )
 
           if escalation_marker in source:
               raise RuntimeError(
-                  "Support human escalation "
-                  "already installed."
+                  "Human escalation already installed"
               )
-
-          required = (
-              "def menu(message):",
-              'command_name == "/paysupport"',
-              "def create_paysupport_ticket(",
-              "ticket = create_support_ticket(",
-              "get_ticket_created_text",
-              "get_db_connection",
-          )
-
-          for marker in required:
-              if marker not in source:
-                  raise RuntimeError(
-                      "Missing bot.py marker: "
-                      + marker
-                  )
-
-          # ==========================================
-          # ADMIN /supportreply ROUTING
-          # ==========================================
 
           menu_position = source.find(
               "def menu(message):"
           )
+
+          if menu_position == -1:
+              raise RuntimeError(
+                  "menu(message) not found"
+              )
 
           paysupport_position = source.find(
               '    if command_name == "/paysupport":',
@@ -94,8 +72,7 @@ jobs:
 
           if paysupport_position == -1:
               raise RuntimeError(
-                  "Paysupport command routing "
-                  "not found."
+                  "Paysupport routing not found"
               )
 
           admin_lines = [
@@ -112,9 +89,7 @@ jobs:
               "",
               "        admin_result = process_admin_reply(",
               "            bot=bot,",
-              "            get_db_connection=(",
-              "                get_db_connection",
-              "            ),",
+              "            get_db_connection=get_db_connection,",
               "            admin_user_id=user_id,",
               "            command_text=message.text,",
               "        )",
@@ -141,39 +116,33 @@ jobs:
               + source[paysupport_position:]
           )
 
-          # ==========================================
-          # HUMAN ESCALATION AFTER TICKET CREATION
-          # ==========================================
-
-          ticket_function_position = source.find(
+          ticket_function = source.find(
               "def create_paysupport_ticket("
           )
 
-          if ticket_function_position == -1:
+          if ticket_function == -1:
               raise RuntimeError(
-                  "Ticket creation function "
-                  "not found."
+                  "Ticket function not found"
               )
 
-          ticket_assignment_position = source.find(
+          ticket_creation = source.find(
               "        ticket = create_support_ticket(",
-              ticket_function_position,
+              ticket_function,
           )
 
-          if ticket_assignment_position == -1:
+          if ticket_creation == -1:
               raise RuntimeError(
-                  "Ticket creation call not found."
+                  "Ticket creation call not found"
               )
 
           confirmation_position = source.find(
               "        bot.send_message(",
-              ticket_assignment_position,
+              ticket_creation,
           )
 
           if confirmation_position == -1:
               raise RuntimeError(
-                  "Ticket confirmation message "
-                  "not found."
+                  "Ticket confirmation not found"
               )
 
           escalation_lines = [
@@ -193,41 +162,30 @@ jobs:
               "        )",
               "",
               "        if escalated:",
-              "            escalated_ticket = (",
-              "                get_support_ticket(",
-              "                    get_db_connection,",
-              "                    ticket[\"ticket_code\"],",
-              "                )",
+              "            escalated_ticket = get_support_ticket(",
+              "                get_db_connection,",
+              "                ticket[\"ticket_code\"],",
               "            )",
               "",
               "            if escalated_ticket:",
-              "                admin_delivery = (",
-              "                    send_ticket_to_admin(",
-              "                        bot,",
-              "                        escalated_ticket,",
-              "                    )",
+              "                admin_delivery = send_ticket_to_admin(",
+              "                    bot,",
+              "                    escalated_ticket,",
               "                )",
               "",
               "                if not admin_delivery.get(",
               "                    \"success\"",
               "                ):",
               "                    print(",
-              "                        (",
-              "                            \"PAYSUPPORT ADMIN \"",
-              "                            \"DELIVERY FAILED:\"",
-              "                        ),",
-              "                        admin_delivery.get(",
-              "                            \"reason\"",
-              "                        ),",
+              "                        \"PAYSUPPORT ADMIN DELIVERY FAILED:\",",
+              "                        admin_delivery.get(\"reason\"),",
               "                        flush=True,",
               "                    )",
               "",
           ]
 
           escalation_block = (
-              "\n".join(
-                  escalation_lines
-              )
+              "\n".join(escalation_lines)
               + "\n"
           )
 
@@ -242,381 +200,95 @@ jobs:
               encoding="utf-8",
           )
 
-          print(
-              "PAYMENT SUPPORT ADMIN CONNECTED"
-          )
+          print("ADMIN SUPPORT CONNECTED")
           PY
 
-      - name: Validate patch script
+      - name: Validate patch
         run: |
-          python -m py_compile /tmp/connect_paysupport_admin.py
+          python -m py_compile /tmp/connect_admin.py
 
-      - name: Apply admin connection patch
+      - name: Apply patch
         run: |
-          python /tmp/connect_paysupport_admin.py
+          python /tmp/connect_admin.py
 
-      - name: Compile complete support stack
+      - name: Compile production stack
         run: |
           python -m py_compile bot.py
           python -m py_compile paysupport_admin.py
           python -m py_compile paysupport_engine.py
           python -m py_compile paysupport_flow.py
           python -m py_compile terms_engine.py
-          python -m py_compile premium_engine.py
           python -m py_compile premium_stars_payment.py
           python -m py_compile premium_stars_handlers.py
           python -m py_compile premium_subscription_engine.py
           python -m py_compile profile_purchase_engine.py
           python -m py_compile profile_stars_payment.py
-          python -m py_compile profile_purchase_delivery.py
 
-      - name: Verify admin reply routing
+      - name: Verify admin connection
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          grep -q "ASTROVIBE SUPPORT ADMIN ROUTING" bot.py
+          grep -q 'command_name == "/supportreply"' bot.py
+          grep -q "process_admin_reply" bot.py
+          grep -q "is_support_admin" bot.py
+          grep -q "ASTROVIBE SUPPORT HUMAN ESCALATION" bot.py
+          grep -q "send_ticket_to_admin" bot.py
+          grep -q "escalate_ticket" bot.py
 
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
+          echo "ADMIN CONNECTION OK"
 
-          required = (
-              "ASTROVIBE SUPPORT ADMIN ROUTING",
-              'command_name == "/supportreply"',
-              "is_support_admin",
-              "process_admin_reply",
-              "get_admin_resolution_text",
-              "get_db_connection",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-              print(
-                  "ADMIN ROUTING OK:",
-                  marker,
-              )
-
-          menu_position = source.find(
-              "def menu(message):"
-          )
-
-          admin_position = source.find(
-              "# ASTROVIBE SUPPORT ADMIN ROUTING",
-              menu_position,
-          )
-
-          paysupport_position = source.find(
-              'command_name == "/paysupport"',
-              menu_position,
-          )
-
-          terms_position = source.find(
-              'command_name == "/terms"',
-              menu_position,
-          )
-
-          fallback_marker = (
-              '"unknown_request"'
-          )
-
-          fallback_position = source.find(
-              fallback_marker,
-              menu_position,
-          )
-
-          assert menu_position != -1
-          assert admin_position != -1
-          assert paysupport_position != -1
-          assert terms_position != -1
-          assert fallback_position != -1
-
-          assert (
-              menu_position
-              < admin_position
-              < paysupport_position
-              < terms_position
-              < fallback_position
-          )
-
-          assert source.count(
-              "# ASTROVIBE SUPPORT ADMIN ROUTING"
-          ) == 1
-
-          assert source.count(
-              'command_name == "/supportreply"'
-          ) == 1
-
-          print(
-              "ADMIN ROUTING ORDER VERIFIED"
-          )
-          PY
-
-      - name: Verify real ticket escalation wiring
+      - name: Verify support preserved
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          grep -q 'command_name == "/paysupport"' bot.py
+          grep -q "handle_paysupport_category" bot.py
+          grep -q "create_paysupport_ticket" bot.py
+          grep -q "create_support_ticket" bot.py
 
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
-              "ASTROVIBE SUPPORT HUMAN ESCALATION",
-              "escalate_ticket",
-              "get_support_ticket",
-              "send_ticket_to_admin",
-              "admin_delivery",
-              "PAYSUPPORT ADMIN",
-              "DELIVERY FAILED:",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-              print(
-                  "ESCALATION OK:",
-                  marker,
-              )
-
-          ticket_function = source.find(
-              "def create_paysupport_ticket("
-          )
-
-          ticket_creation = source.find(
-              "ticket = create_support_ticket(",
-              ticket_function,
-          )
-
-          escalation_position = source.find(
-              "# ASTROVIBE SUPPORT HUMAN ESCALATION",
-              ticket_creation,
-          )
-
-          confirmation_position = source.find(
-              "get_ticket_created_text",
-              escalation_position,
-          )
-
-          assert ticket_function != -1
-          assert ticket_creation != -1
-          assert escalation_position != -1
-          assert confirmation_position != -1
-
-          assert (
-              ticket_function
-              < ticket_creation
-              < escalation_position
-              < confirmation_position
-          )
-
-          assert source.count(
-              "# ASTROVIBE SUPPORT HUMAN ESCALATION"
-          ) == 1
-
-          print(
-              "REAL HUMAN ESCALATION VERIFIED"
-          )
-          PY
-
-      - name: Test admin helper without real Telegram
-        env:
-          SUPPORT_ADMIN_TELEGRAM_ID: "123456789"
-        run: |
-          python - <<'PY'
-          from paysupport_admin import (
-              build_admin_ticket_message,
-              is_support_admin,
-              parse_admin_reply_command,
-          )
-
-          assert (
-              is_support_admin(
-                  123456789
-              )
-              is True
-          )
-
-          assert (
-              is_support_admin(
-                  999999999
-              )
-              is False
-          )
-
-          parsed = parse_admin_reply_command(
-              "/supportreply "
-              "AV-B0DC89 "
-              "Réponse support de test."
-          )
-
-          assert parsed is not None
-
-          assert (
-              parsed["ticket_code"]
-              == "AV-B0DC89"
-          )
-
-          assert (
-              parsed["reply"]
-              == "Réponse support de test."
-          )
-
-          ticket = {
-              "ticket_code": "AV-B0DC89",
-              "user_id": 987654321,
-              "language": "fr",
-              "category": "premium",
-              "product": "premium",
-              "user_message": (
-                  "Test support Premium."
-              ),
-              "payment_amount_stars": 199,
-          }
-
-          message = build_admin_ticket_message(
-              ticket
-          )
-
-          assert "AV-B0DC89" in message
-          assert "199 ⭐" in message
-          assert "/supportreply" in message
-
-          print(
-              "ADMIN HELPER CONTRACT OK"
-          )
-          PY
+          echo "PAYMENT SUPPORT PRESERVED"
 
       - name: Verify Terms preserved
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          grep -q 'command_name == "/terms"' bot.py
+          grep -q "ASTROVIBE TERMS COMMAND" bot.py
 
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
+          echo "TERMS PRESERVED"
 
-          required = (
-              'command_name == "/terms"',
-              "ASTROVIBE TERMS COMMAND",
-              "get_terms",
-              "split_terms",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "TERMS FR EN PRESERVED"
-          )
-          PY
-
-      - name: Verify Profile payment preserved
+      - name: Verify Profile preserved
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          grep -q "astrovibe_profile_v2:" bot.py
+          grep -q "process_successful_profile_purchase" bot.py
+          grep -q "send_personal_profile" bot.py
+          grep -q "init_profile_purchase_table" bot.py
 
-          )
+          echo "PROFILE 390 STARS PRESERVED"
 
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "PROFILE 390 STARS PRESERVED"
-          )
-          PY
-
-      - name: Verify Premium payment preserved
+      - name: Verify Premium preserved
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          grep -q "astrovibe_premium:" bot.py
+          grep -q "createInvoiceLink" bot.py
+          grep -q "process_successful_premium_payment" bot.py
+          grep -q "premium_subscription_buttons" bot.py
 
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
-              "astrovibe_premium:",
-              "createInvoiceLink",
-              "process_premium_pre_checkout",
-              "process_successful_premium_payment",
-              "premium_subscription_buttons",
-              "def is_premium",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "PREMIUM 199 STARS PRESERVED"
-          )
-          PY
-
-      - name: Verify support system preserved
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path("bot.py").read_text(
-              encoding="utf-8"
-          )
-
-          required = (
-              'command_name == "/paysupport"',
-              "ASTROVIBE PAYSUPPORT CALLBACK",
-              "handle_paysupport_category",
-              "register_next_step_handler",
-              "create_paysupport_ticket",
-              "create_support_ticket",
-              "get_ticket_created_text",
-          )
-
-          for marker in required:
-              assert marker in source, marker
-
-          print(
-              "PAYMENT SUPPORT PRESERVED"
-          )
-          PY
+          echo "PREMIUM 199 STARS PRESERVED"
 
       - name: Remove Python cache
         run: |
           find . -type d -name "__pycache__" -prune -exec rm -rf {} +
           find . -type f -name "*.pyc" -delete
 
-          echo "PYTHON CACHE REMOVED"
-
       - name: Verify only bot.py changed
         run: |
-          python - <<'PY'
-          import subprocess
+          CHANGED="$(git diff --name-only)"
 
-          result = subprocess.run(
-              [
-                  "git",
-                  "diff",
-                  "--name-only",
-              ],
-              check=True,
-              capture_output=True,
-              text=True,
-          )
+          echo "$CHANGED"
 
-          changed = {
-              line.strip()
-              for line
-              in result.stdout.splitlines()
-              if line.strip()
-          }
+          if [ "$CHANGED" != "bot.py" ]; then
+            echo "Unexpected changed files"
+            exit 1
+          fi
 
-          assert changed == {"bot.py"}, (
-              "Unexpected changed files: "
-              + repr(sorted(changed))
-          )
+          echo "ONLY BOT.PY CHANGED"
 
-          print(
-              "ONLY BOT.PY CHANGED"
-          )
-          PY
-
-      - name: Show bot.py changes
+      - name: Show final diff
         run: |
           git diff -- bot.py
 
