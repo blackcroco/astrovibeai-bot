@@ -25,96 +25,150 @@ jobs:
       - name: Patch main menu
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           path = Path("bot.py")
           source = path.read_text(encoding="utf-8")
 
-          start_marker = 'def menu_principal(langue="fr"):'
-          end_marker = 'def menu_des_paramètres(langue="fr"):'
+          function_match = re.search(
+              r'^def main_menu\s*$$[^)]*$$:',
+              source,
+              flags=re.MULTILINE,
+          )
 
-          start = source.find(start_marker)
-          end = source.find(end_marker, start)
-
-          if start == -1:
+          if function_match is None:
               raise RuntimeError(
-                  "menu_principal() introuvable. Aucun patch effectue."
+                  "main_menu() introuvable. "
+                  "Aucun patch effectue."
               )
 
-          if end == -1:
+          start = function_match.start()
+
+          next_function = re.search(
+              r'^def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(',
+              source[function_match.end():],
+              flags=re.MULTILINE,
+          )
+
+          if next_function is None:
               raise RuntimeError(
-                  "menu_des_parametres() introuvable. Aucun patch effectue."
+                  "Fonction suivante introuvable. "
+                  "Aucun patch effectue."
               )
+
+          end = (
+              function_match.end()
+              + next_function.start()
+          )
 
           old_block = source[start:end]
 
-          if "bouton_horoscope" not in old_block:
-              raise RuntimeError(
-                  "Securite: bouton horoscope absent du menu actuel."
-              )
+          required_old_markers = (
+              "horoscope_button",
+              "compatibility_button",
+              "bonus_button",
+              "points_button",
+              "premium_button",
+          )
 
-          if "bonus_button" not in old_block:
-              raise RuntimeError(
-                  "Securite: bonus_button absent du menu actuel."
-              )
+          for marker in required_old_markers:
+              if marker not in old_block:
+                  raise RuntimeError(
+                      f"Marqueur absent du menu actuel: {marker}. "
+                      "Aucun patch effectue."
+                  )
 
-          if "points_button" not in old_block:
+          settings_candidates = (
+              "settings_button",
+              "parameters_button",
+          )
+
+          settings_key = next(
+              (
+                  candidate
+                  for candidate in settings_candidates
+                  if candidate in old_block
+              ),
+              None,
+          )
+
+          if settings_key is None:
               raise RuntimeError(
-                  "Securite: points_button absent du menu actuel."
+                  "Cle du bouton Settings introuvable. "
+                  "Aucun patch effectue."
               )
 
           Path(
-              "menu_principal_before_patch.txt"
+              "menu_main_before_patch.txt"
           ).write_text(
               old_block,
               encoding="utf-8",
           )
 
-          new_block = '''def menu_principal(langue="fr"):
-              marge = types.ReplyKeyboardMarkup(
+          new_block = f'''def main_menu(language="fr"):
+              markup = types.ReplyKeyboardMarkup(
                   resize_keyboard=True
               )
 
-              marge.row(
+              markup.row(
                   types.KeyboardButton(
-                      obtenir_texte(langue, "bouton_horoscope")
+                      get_text(
+                          language,
+                          "horoscope_button"
+                      )
                   ),
                   types.KeyboardButton(
-                      obtenir_texte(langue, "bouton_compatibilite")
+                      get_text(
+                          language,
+                          "compatibility_button"
+                      )
                   )
               )
 
-              bouton_de_profil = (
+              profile_button = (
                   "✨ My AstroVibe Profile"
-                  if langue == "en"
+                  if language == "en"
                   else "✨ Mon Profil AstroVibe"
               )
 
-              marge.row(
+              markup.row(
                   types.KeyboardButton(
-                      bouton_de_profil
+                      profile_button
                   ),
                   types.KeyboardButton(
-                      obtenir_texte(langue, "bouton_premium")
+                      get_text(
+                          language,
+                          "premium_button"
+                      )
                   )
               )
 
-              marge.row(
+              markup.row(
                   types.KeyboardButton(
-                      obtenir_texte(langue, "bonus_button")
+                      get_text(
+                          language,
+                          "bonus_button"
+                      )
                   ),
                   types.KeyboardButton(
-                      obtenir_texte(langue, "points_button")
+                      get_text(
+                          language,
+                          "points_button"
+                      )
                   )
               )
 
-              marge.row(
+              markup.row(
                   types.KeyboardButton(
-                      obtenir_texte(langue, "bouton_parametres")
+                      get_text(
+                          language,
+                          "{settings_key}"
+                      )
                   )
               )
 
-              return marge
+              return markup
 
 
           '''
@@ -125,12 +179,18 @@ jobs:
               + source[end:]
           )
 
+          if patched == source:
+              raise RuntimeError(
+                  "Le patch ne produit aucun changement."
+              )
+
           path.write_text(
               patched,
               encoding="utf-8",
           )
 
           print("MAIN MENU PATCHED")
+          print("Settings key:", settings_key)
           print("")
           print("Target layout:")
           print("Horoscope | Compatibility")
@@ -145,46 +205,69 @@ jobs:
       - name: Verify new main menu
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           source = Path("bot.py").read_text(
               encoding="utf-8"
           )
 
-          start = source.find(
-              'def menu_principal(langue="fr"):'
+          function_match = re.search(
+              r'^def main_menu\s*$$[^)]*$$:',
+              source,
+              flags=re.MULTILINE,
           )
 
-          end = source.find(
-              'def menu_des_paramètres(langue="fr"):',
-              start,
+          assert function_match is not None
+
+          next_function = re.search(
+              r'^def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(',
+              source[function_match.end():],
+              flags=re.MULTILINE,
           )
 
-          assert start != -1
-          assert end != -1
+          assert next_function is not None
 
-          menu = source[start:end]
+          end = (
+              function_match.end()
+              + next_function.start()
+          )
+
+          menu = source[
+              function_match.start():end
+          ]
 
           required = (
-              "bouton_horoscope",
-              "bouton_compatibilite",
+              "horoscope_button",
+              "compatibility_button",
               "✨ Mon Profil AstroVibe",
               "✨ My AstroVibe Profile",
-              "bouton_premium",
+              "premium_button",
               "bonus_button",
               "points_button",
-              "bouton_parametres",
-              "return marge",
+              "return markup",
           )
 
           for marker in required:
               assert marker in menu, marker
               print("OK:", marker)
 
+          assert (
+              "settings_button" in menu
+              or "parameters_button" in menu
+          )
+
+          row_count = menu.count("markup.row(")
+
+          assert row_count == 4, (
+              f"Expected 4 menu rows, found {row_count}"
+          )
+
+          print("OK: four menu rows")
           print("MAIN MENU VERIFIED")
           PY
 
-      - name: Verify profile purchase stack still present
+      - name: Verify profile entry handler still present
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -194,16 +277,38 @@ jobs:
           )
 
           required = (
+              "✨ Mon Profil AstroVibe",
+              "✨ My AstroVibe Profile",
               "unlock_profile_390",
               "handle_profile_unlock_preview",
-              "process_successful_profile_purchase",
           )
 
           for marker in required:
               assert marker in bot, marker
               print("OK:", marker)
 
-          print("PROFILE PURCHASE WIRING PRESERVED")
+          print("PROFILE ENTRY HANDLER PRESERVED")
+          PY
+
+      - name: Verify purchase delivery still present
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          bot = Path("bot.py").read_text(
+              encoding="utf-8"
+          )
+
+          required = (
+              "process_successful_profile_purchase",
+              "has_purchased_profile",
+          )
+
+          for marker in required:
+              assert marker in bot, marker
+              print("OK:", marker)
+
+          print("PURCHASE DELIVERY PRESERVED")
           PY
 
       - name: Compile profile payment stack
@@ -212,18 +317,52 @@ jobs:
       - name: Show bot.py changes
         run: git diff -- bot.py
 
-      - name: Verify only bot.py will be committed
+      - name: Verify protected files unchanged
         run: |
-          git status --short
-          git diff --quiet -- . ':!bot.py' || {
-            echo "Unexpected tracked file changed."
-            exit 1
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              "bot.py",
           }
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = {
+              line.strip()
+              for line in result.stdout.splitlines()
+              if line.strip()
+          }
+
+          unexpected = changed - allowed
+
+          if unexpected:
+              raise RuntimeError(
+                  "Unexpected tracked files changed: "
+                  + ", ".join(sorted(unexpected))
+              )
+
+          if "bot.py" not in changed:
+              raise RuntimeError(
+                  "bot.py was not changed."
+              )
+
+          print("ONLY BOT.PY CHANGED")
+          PY
 
       - name: Commit safe main menu update
         run: |
           rm -f bot.py.before-main-menu-update
-          rm -f menu_principal_before_patch.txt
+          rm -f menu_main_before_patch.txt
 
           git add bot.py
 
@@ -235,5 +374,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git commit -m "Update main menu with AstroVibe Profile"
+          git commit -m "Add AstroVibe Profile to main menu"
           git push
