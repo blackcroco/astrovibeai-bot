@@ -3543,6 +3543,37 @@ def astro_premium_pre_checkout(query):
         )
 
 
+
+# ==================================================
+# ASTROVIBE TERMS COMMAND
+# ==================================================
+
+@bot.message_handler(commands=["terms"])
+def handle_terms_command(message):
+    from terms_engine import (
+        get_terms,
+        split_terms,
+    )
+
+    user_id = message.from_user.id
+
+    language = get_user_language(
+        user_id
+    )
+
+    terms_text = get_terms(
+        language
+    )
+
+    for part in split_terms(
+        terms_text
+    ):
+        bot.send_message(
+            message.chat.id,
+            part,
+        )
+
+
 # PROFILE PURCHASE NEON CONNECTION
 # ============================================
 
