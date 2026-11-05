@@ -19,10 +19,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Backup bot.py
-        run: cp bot.py bot.py.before-main-menu-update
-
-      - name: Locate and patch main menu
+      - name: Patch main menu
         run: |
           python - <<'PY'
           import ast
@@ -30,11 +27,39 @@ jobs:
 
           path = Path("bot.py")
           source = path.read_text(encoding="utf-8")
-          lines = source.splitlines(keepends=True)
-
           tree = ast.parse(source)
 
-          required_markers = (
+          target = None
+
+          for node in tree.body:
+              if (
+                  isinstance(node, ast.FunctionDef)
+                  and node.name == "main_menu"
+              ):
+                  target = node
+                  break
+
+          if target is None:
+              raise RuntimeError(
+                  "main_menu() introuvable. Aucun patch effectue."
+              )
+
+          if not hasattr(target, "end_lineno"):
+              raise RuntimeError(
+                  "Impossible de determiner la fin de main_menu()."
+              )
+
+          old_block = ast.get_source_segment(
+              source,
+              target,
+          )
+
+          if not old_block:
+              raise RuntimeError(
+                  "Impossible de lire main_menu()."
+              )
+
+          required = (
               "horoscope_button",
               "compatibility_button",
               "bonus_button",
@@ -42,62 +67,14 @@ jobs:
               "premium_button",
           )
 
-          candidates = []
-
-          for node in ast.walk(tree):
-              if not isinstance(
-                  node,
-                  (ast.FunctionDef, ast.AsyncFunctionDef),
-              ):
-                  continue
-
-              if not hasattr(node, "end_lineno"):
-                  continue
-
-              block = "".join(
-                  lines[
-                      node.lineno - 1:
-                      node.end_lineno
-                  ]
-              )
-
-              if all(
-                  marker in block
-                  for marker in required_markers
-              ):
-                  candidates.append(
-                      (node, block)
+          for marker in required:
+              if marker not in old_block:
+                  raise RuntimeError(
+                      "Marqueur absent de main_menu(): "
+                      + marker
                   )
 
-          if len(candidates) == 0:
-              raise RuntimeError(
-                  "Aucune fonction de menu contenant "
-                  "tous les boutons principaux."
-              )
-
-          if len(candidates) > 1:
-              names = ", ".join(
-                  node.name
-                  for node, _ in candidates
-              )
-
-              raise RuntimeError(
-                  "Plusieurs fonctions candidates: "
-                  + names
-              )
-
-          node, old_block = candidates[0]
-
-          if not node.args.args:
-              raise RuntimeError(
-                  "Le menu ne possede aucun parametre "
-                  "de langue identifiable."
-              )
-
-          function_name = node.name
-          language_name = node.args.args[0].arg
-
-          settings_candidates = (
+          settings_keys = (
               "settings_button",
               "parameters_button",
           )
@@ -105,7 +82,7 @@ jobs:
           settings_key = next(
               (
                   key
-                  for key in settings_candidates
+                  for key in settings_keys
                   if key in old_block
               ),
               None,
@@ -113,32 +90,22 @@ jobs:
 
           if settings_key is None:
               raise RuntimeError(
-                  "Cle Settings introuvable dans "
-                  "le menu actuel."
+                  "Bouton Settings introuvable dans main_menu()."
               )
 
-          Path(
-              "main_menu_before_patch.txt"
-          ).write_text(
-              old_block,
-              encoding="utf-8",
-          )
+          lines = source.splitlines(keepends=True)
 
-          start_index = sum(
+          start = sum(
               len(line)
-              for line in lines[:node.lineno - 1]
+              for line in lines[:target.lineno - 1]
           )
 
-          end_index = sum(
+          end = sum(
               len(line)
-              for line in lines[:node.end_lineno]
+              for line in lines[:target.end_lineno]
           )
 
-          function_header = lines[
-              node.lineno - 1
-          ].rstrip("\r\n")
-
-          new_block = f'''{function_header}
+          new_block = f'''def main_menu(language="fr"):
               markup = types.ReplyKeyboardMarkup(
                   resize_keyboard=True
               )
@@ -146,13 +113,13 @@ jobs:
               markup.row(
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "horoscope_button"
                       )
                   ),
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "compatibility_button"
                       )
                   )
@@ -160,7 +127,7 @@ jobs:
 
               profile_button = (
                   "✨ My AstroVibe Profile"
-                  if {language_name} == "en"
+                  if language == "en"
                   else "✨ Mon Profil AstroVibe"
               )
 
@@ -170,7 +137,7 @@ jobs:
                   ),
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "premium_button"
                       )
                   )
@@ -179,13 +146,13 @@ jobs:
               markup.row(
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "bonus_button"
                       )
                   ),
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "points_button"
                       )
                   )
@@ -194,24 +161,23 @@ jobs:
               markup.row(
                   types.KeyboardButton(
                       get_text(
-                          {language_name},
+                          language,
                           "{settings_key}"
                       )
                   )
               )
 
-              return markup
-          '''
+              return markup'''
 
           patched = (
-              source[:start_index]
+              source[:start]
               + new_block
-              + source[end_index:]
+              + source[end:]
           )
 
           if patched == source:
               raise RuntimeError(
-                  "Le patch ne produit aucun changement."
+                  "Aucun changement produit."
               )
 
           path.write_text(
@@ -219,25 +185,14 @@ jobs:
               encoding="utf-8",
           )
 
-          print(
-              "FUNCTION FOUND:",
-              function_name,
-          )
-          print(
-              "LANGUAGE PARAMETER:",
-              language_name,
-          )
-          print(
-              "SETTINGS KEY:",
-              settings_key,
-          )
           print("MAIN MENU PATCHED")
+          print("Settings key:", settings_key)
           PY
 
-      - name: Compile bot.py
+      - name: Compile bot
         run: python -m py_compile bot.py
 
-      - name: Verify main menu layout
+      - name: Verify main menu
         run: |
           python - <<'PY'
           import ast
@@ -249,6 +204,25 @@ jobs:
 
           tree = ast.parse(source)
 
+          target = None
+
+          for node in tree.body:
+              if (
+                  isinstance(node, ast.FunctionDef)
+                  and node.name == "main_menu"
+              ):
+                  target = node
+                  break
+
+          assert target is not None
+
+          menu = ast.get_source_segment(
+              source,
+              target,
+          )
+
+          assert menu
+
           required = (
               "horoscope_button",
               "compatibility_button",
@@ -257,71 +231,32 @@ jobs:
               "premium_button",
               "bonus_button",
               "points_button",
+              "return markup",
           )
 
-          matches = []
-
-          for node in ast.walk(tree):
-              if not isinstance(
-                  node,
-                  (ast.FunctionDef, ast.AsyncFunctionDef),
-              ):
-                  continue
-
-              block = ast.get_source_segment(
-                  source,
-                  node,
-              )
-
-              if not block:
-                  continue
-
-              if all(
-                  marker in block
-                  for marker in required
-              ):
-                  matches.append(
-                      (node, block)
-                  )
-
-          assert len(matches) == 1, (
-              "Expected one patched main menu, "
-              f"found {len(matches)}"
-          )
-
-          node, menu = matches[0]
+          for marker in required:
+              assert marker in menu, marker
+              print("OK:", marker)
 
           assert (
               "settings_button" in menu
               or "parameters_button" in menu
           )
 
-          row_count = menu.count(
+          assert menu.count(
               "markup.row("
-          )
+          ) == 4
 
-          assert row_count == 4, (
-              "Expected 4 rows, "
-              f"found {row_count}"
-          )
-
-          for marker in required:
-              print("OK:", marker)
-
-          print(
-              "FUNCTION:",
-              node.name,
-          )
-          print("OK: four menu rows")
+          print("OK: 4 menu rows")
           print("MAIN MENU VERIFIED")
           PY
 
-      - name: Verify profile handlers preserved
+      - name: Verify Profile handlers
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          bot = Path("bot.py").read_text(
+          source = Path("bot.py").read_text(
               encoding="utf-8"
           )
 
@@ -335,17 +270,33 @@ jobs:
           )
 
           for marker in required:
-              assert marker in bot, marker
+              assert marker in source, marker
               print("OK:", marker)
 
           print("PROFILE HANDLERS PRESERVED")
           PY
 
-      - name: Compile profile payment stack
-        run: python -m py_compile profile_stars_payment.py profile_stars_handlers.py profile_purchase_engine.py profile_purchase_delivery.py personal_profile_v2_engine.py
+      - name: Compile payment stack
+        run: |
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile profile_stars_handlers.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile profile_purchase_delivery.py
+          python -m py_compile personal_profile_v2_engine.py
 
-      - name: Show bot.py changes
-        run: git diff -- bot.py
+      - name: Verify purchase workflow files
+        run: |
+          test -f profile_stars_payment.py
+          test -f profile_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f profile_purchase_delivery.py
+          echo "PAYMENT FILES OK"
+
+      - name: Show changes
+        run: |
+          echo "========== BOT.PY DIFF =========="
+          git diff -- bot.py
+          echo "================================="
 
       - name: Verify only bot.py changed
         run: |
@@ -353,40 +304,34 @@ jobs:
           import subprocess
 
           result = subprocess.run(
-              [
-                  "git",
-                  "diff",
-                  "--name-only",
-              ],
-              check=True,
+              ["git", "diff", "--name-only"],
               capture_output=True,
               text=True,
+              check=True,
           )
 
           changed = {
-              line.strip()
-              for line in result.stdout.splitlines()
-              if line.strip()
+              item.strip()
+              for item in result.stdout.splitlines()
+              if item.strip()
           }
 
-          assert changed == {"bot.py"}, (
-              "Unexpected changed files: "
-              + ", ".join(sorted(changed))
-          )
+          if changed != {"bot.py"}:
+              raise RuntimeError(
+                  "Fichiers inattendus modifies: "
+                  + repr(sorted(changed))
+              )
 
           print("ONLY BOT.PY CHANGED")
           PY
 
       - name: Commit safe main menu update
         run: |
-          rm -f bot.py.before-main-menu-update
-          rm -f main_menu_before_patch.txt
-
           git add bot.py
 
           if git diff --cached --quiet; then
-            echo "No bot.py change to commit."
-            exit 0
+            echo "No change to commit."
+            exit 1
           fi
 
           git config user.name "github-actions[bot]"
