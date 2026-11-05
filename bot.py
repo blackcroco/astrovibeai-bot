@@ -3102,14 +3102,15 @@ def handle_profile_unlock_preview(call):
         call.from_user.id
     )
 
-    from profile_stars_handlers import (
-        send_profile_invoice,
+    from profile_purchase_delivery import (
+        send_profile_invoice_if_not_owned,
     )
 
-    send_profile_invoice(
-        bot,
-        call,
-        language,
+    send_profile_invoice_if_not_owned(
+        bot=bot,
+        call=call,
+        language=language,
+        connection_factory=get_db_connection,
     )
 
 
@@ -3185,13 +3186,14 @@ def handle_profile_successful_payment(message):
     )
 )
 def astro_profile_pre_checkout(query):
-    from profile_stars_handlers import (
-        process_profile_pre_checkout,
+    from profile_purchase_delivery import (
+        process_profile_pre_checkout_with_ownership,
     )
 
-    process_profile_pre_checkout(
-        bot,
-        query,
+    process_profile_pre_checkout_with_ownership(
+        bot=bot,
+        query=query,
+        connection_factory=get_db_connection,
     )
 
 
@@ -3216,15 +3218,29 @@ def astro_profile_successful_payment(message):
         message.from_user.id
     )
 
-    from profile_stars_handlers import (
-        process_profile_successful_payment,
+    from profile_purchase_delivery import (
+        process_successful_profile_purchase,
     )
 
-    process_profile_successful_payment(
-        bot,
-        message,
-        language,
+    process_successful_profile_purchase(
+        bot=bot,
+        message=message,
+        language=language,
+        connection_factory=get_db_connection,
     )
+
+
+# ============================================
+# PROFILE PURCHASE NEON CONNECTION
+# ============================================
+
+from profile_purchase_engine import (
+    init_profile_purchase_table,
+)
+
+init_profile_purchase_table(
+    get_db_connection
+)
 
 # INITIALISATION
 # ==================================================
