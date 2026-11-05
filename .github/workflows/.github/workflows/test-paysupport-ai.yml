@@ -1,0 +1,816 @@
+name: Test Payment Support AI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-paysupport-ai:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPPORT_AI_MODEL: "test-model"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pydantic
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic
+
+      - name: Verify required files
+        run: |
+          test -f paysupport_ai.py
+          test -f paysupport_admin.py
+          test -f paysupport_engine.py
+          test -f paysupport_flow.py
+          test -f bot.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Compile AI support engine
+        run: |
+          python -m py_compile paysupport_ai.py
+
+          echo "AI SUPPORT ENGINE COMPILES"
+
+      - name: Test AI configuration
+        run: |
+          python - <<'PY'
+          import os
+
+          import paysupport_ai as ai
+
+          assert (
+              ai.SUPPORT_AI_MODEL_ENV
+              == "SUPPORT_AI_MODEL"
+          )
+
+          assert (
+              ai.SUPPORT_AI_API_KEY_ENV
+              == "OPENAI_API_KEY"
+          )
+
+          assert (
+              ai.get_support_ai_model()
+              == "test-model"
+          )
+
+          assert (
+              ai.support_ai_is_configured()
+              is False
+          )
+
+          os.environ[
+              "OPENAI_API_KEY"
+          ] = "fake-test-key"
+
+          assert (
+              ai.support_ai_is_configured()
+              is True
+          )
+
+          print("AI CONFIGURATION OK")
+          PY
+
+      - name: Test support context
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              build_support_context,
+          )
+
+          ticket = {
+              "ticket_code": "AV-AI0001",
+              "language": "fr",
+              "category": "premium",
+              "product": "premium",
+              "user_message": (
+                  "Quelle est la différence "
+                  "entre Premium et le Profil ?"
+              ),
+              "payment_amount_stars": 199,
+              "telegram_payment_charge_id": None,
+          }
+
+          context = build_support_context(
+              ticket
+          )
+
+          required = (
+              "AV-AI0001",
+              "language: fr",
+              "category: premium",
+              "product: premium",
+              "amount_stars: 199",
+              "not_provided",
+              "Quelle est la différence",
+          )
+
+          for marker in required:
+              assert marker in context, marker
+
+          try:
+              build_support_context(
+                  "invalid"
+              )
+          except ValueError:
+              pass
+          else:
+              raise AssertionError(
+                  "Invalid ticket accepted"
+              )
+
+          print("SUPPORT CONTEXT OK")
+          PY
+
+      - name: Test mandatory human escalation
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              requires_human_review,
+          )
+
+          sensitive_tickets = [
+              {
+                  "category": "refund",
+                  "user_message": (
+                      "Je souhaite un remboursement"
+                  ),
+              },
+              {
+                  "category": "subscription",
+                  "user_message": (
+                      "Problème de renouvellement"
+                  ),
+              },
+              {
+                  "category": "premium",
+                  "user_message": (
+                      "J'ai payé 199 Stars "
+                      "mais Premium n'est pas activé"
+                  ),
+              },
+              {
+                  "category": "payment",
+                  "user_message": (
+                      "J'ai été débité mais "
+                      "je n'ai rien reçu"
+                  ),
+              },
+              {
+                  "category": "profile",
+                  "user_message": (
+                      "The payment was charged "
+                      "but my Profile is not unlocked"
+                  ),
+              },
+          ]
+
+          for ticket in sensitive_tickets:
+              assert (
+                  requires_human_review(
+                      ticket
+                  )
+                  is True
+              ), ticket
+
+          safe_ticket = {
+              "category": "other",
+              "user_message": (
+                  "Quelle est la différence "
+                  "entre Premium et le Profil ?"
+              ),
+          }
+
+          assert (
+              requires_human_review(
+                  safe_ticket
+              )
+              is False
+          )
+
+          print(
+              "MANDATORY ESCALATION RULES OK"
+          )
+          PY
+
+      - name: Test sensitive ticket bypasses AI
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              DECISION_ESCALATE,
+              analyze_support_ticket,
+          )
+
+
+          class ForbiddenClient:
+              @property
+              def responses(self):
+                  raise AssertionError(
+                      "AI must not be called "
+                      "for sensitive ticket"
+                  )
+
+
+          ticket = {
+              "ticket_code": "AV-PAY001",
+              "language": "fr",
+              "category": "premium",
+              "product": "premium",
+              "user_message": (
+                  "J'ai payé 199 Stars mais "
+                  "Premium ne s'est pas activé"
+              ),
+              "payment_amount_stars": 199,
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=ForbiddenClient(),
+          )
+
+          assert (
+              result.decision
+              == DECISION_ESCALATE
+          )
+
+          assert (
+              "vérification"
+              in result.user_reply.lower()
+          )
+
+          print(
+              "SENSITIVE TICKET FORCED "
+              "TO HUMAN"
+          )
+          PY
+
+      - name: Test refund forced to human
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              DECISION_ESCALATE,
+              analyze_support_ticket,
+          )
+
+
+          class ForbiddenClient:
+              @property
+              def responses(self):
+                  raise AssertionError(
+                      "Refund request must not "
+                      "depend on AI"
+                  )
+
+
+          ticket = {
+              "ticket_code": "AV-REF001",
+              "language": "fr",
+              "category": "refund",
+              "product": "premium",
+              "user_message": (
+                  "Je demande un remboursement"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=ForbiddenClient(),
+          )
+
+          assert (
+              result.decision
+              == DECISION_ESCALATE
+          )
+
+          print(
+              "REFUND FORCED TO HUMAN"
+          )
+          PY
+
+      - name: Test simple question resolved by fake AI
+        run: |
+          python - <<'PY'
+          from types import SimpleNamespace
+
+          from paysupport_ai import (
+              DECISION_RESOLVE,
+              SupportAIResult,
+              analyze_support_ticket,
+          )
+
+
+          class FakeResponses:
+              def parse(
+                  self,
+                  model,
+                  input,
+                  text_format,
+              ):
+                  assert model == "test-model"
+
+                  assert (
+                      text_format
+                      is SupportAIResult
+                  )
+
+                  assert len(input) == 2
+
+                  return SimpleNamespace(
+                      output_parsed=(
+                          SupportAIResult(
+                              decision="resolve",
+                              summary=(
+                                  "Question générale "
+                                  "sur les produits."
+                              ),
+                              user_reply=(
+                                  "Le Profil est un achat "
+                                  "unique à 390 Stars. "
+                                  "Premium est un abonnement "
+                                  "à 199 Stars tous les "
+                                  "30 jours."
+                              ),
+                              reason=(
+                                  "Informational question"
+                              ),
+                          )
+                      )
+                  )
+
+
+          class FakeClient:
+              def __init__(self):
+                  self.responses = FakeResponses()
+
+
+          ticket = {
+              "ticket_code": "AV-INFO01",
+              "language": "fr",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "Quelle est la différence "
+                  "entre Premium et le Profil ?"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=FakeClient(),
+          )
+
+          assert (
+              result.decision
+              == DECISION_RESOLVE
+          )
+
+          assert "390" in result.user_reply
+          assert "199" in result.user_reply
+
+          print(
+              "SAFE INFORMATIONAL QUESTION "
+              "RESOLVED"
+          )
+          PY
+
+      - name: Test missing information response
+        run: |
+          python - <<'PY'
+          from types import SimpleNamespace
+
+          from paysupport_ai import (
+              DECISION_NEED_INFO,
+              SupportAIResult,
+              analyze_support_ticket,
+          )
+
+
+          class FakeResponses:
+              def parse(
+                  self,
+                  model,
+                  input,
+                  text_format,
+              ):
+                  return SimpleNamespace(
+                      output_parsed=(
+                          SupportAIResult(
+                              decision="need_info",
+                              summary=(
+                                  "The problem is unclear."
+                              ),
+                              user_reply=(
+                                  "Peux-tu préciser si "
+                                  "ton problème concerne "
+                                  "le Profil ou Premium ?"
+                              ),
+                              reason=(
+                                  "Missing product"
+                              ),
+                          )
+                      )
+                  )
+
+
+          class FakeClient:
+              def __init__(self):
+                  self.responses = FakeResponses()
+
+
+          ticket = {
+              "ticket_code": "AV-INFO02",
+              "language": "fr",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "Ça ne marche pas"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=FakeClient(),
+          )
+
+          assert (
+              result.decision
+              == DECISION_NEED_INFO
+          )
+
+          assert "préciser" in (
+              result.user_reply.lower()
+          )
+
+          print(
+              "MISSING INFORMATION HANDLED"
+          )
+          PY
+
+      - name: Test English AI response
+        run: |
+          python - <<'PY'
+          from types import SimpleNamespace
+
+          from paysupport_ai import (
+              SupportAIResult,
+              analyze_support_ticket,
+              build_ai_user_message,
+          )
+
+
+          class FakeResponses:
+              def parse(
+                  self,
+                  model,
+                  input,
+                  text_format,
+              ):
+                  return SimpleNamespace(
+                      output_parsed=(
+                          SupportAIResult(
+                              decision="resolve",
+                              summary=(
+                                  "General pricing question."
+                              ),
+                              user_reply=(
+                                  "The Personal Profile "
+                                  "is a one-time purchase."
+                              ),
+                              reason=(
+                                  "Informational"
+                              ),
+                          )
+                      )
+                  )
+
+
+          class FakeClient:
+              def __init__(self):
+                  self.responses = FakeResponses()
+
+
+          ticket = {
+              "ticket_code": "AV-ENAI01",
+              "language": "en",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "Is the Personal Profile "
+                  "a one-time purchase?"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=FakeClient(),
+          )
+
+          message = build_ai_user_message(
+              ticket,
+              result,
+          )
+
+          assert (
+              result.decision
+              == "resolve"
+          )
+
+          assert "AV-ENAI01" in message
+
+          assert (
+              "one-time purchase"
+              in message
+          )
+
+          print("ENGLISH AI RESPONSE OK")
+          PY
+
+      - name: Test AI exception fallback
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              DECISION_ESCALATE,
+              analyze_support_ticket,
+          )
+
+
+          class FailingResponses:
+              def parse(
+                  self,
+                  model,
+                  input,
+                  text_format,
+              ):
+                  raise RuntimeError(
+                      "Simulated AI failure"
+                  )
+
+
+          class FailingClient:
+              def __init__(self):
+                  self.responses = (
+                      FailingResponses()
+                  )
+
+
+          ticket = {
+              "ticket_code": "AV-FAILAI",
+              "language": "en",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "What is AstroVibe Premium?"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket,
+              client=FailingClient(),
+          )
+
+          assert (
+              result.decision
+              == DECISION_ESCALATE
+          )
+
+          assert (
+              "human support"
+              in result.user_reply.lower()
+          )
+
+          print(
+              "AI FAILURE SAFELY ESCALATED"
+          )
+          PY
+
+      - name: Test missing AI configuration fallback
+        run: |
+          python - <<'PY'
+          import os
+
+          from paysupport_ai import (
+              DECISION_ESCALATE,
+              analyze_support_ticket,
+          )
+
+          os.environ.pop(
+              "OPENAI_API_KEY",
+              None,
+          )
+
+          ticket = {
+              "ticket_code": "AV-NOAI01",
+              "language": "fr",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "Quelle est l'offre Premium ?"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket
+          )
+
+          assert (
+              result.decision
+              == DECISION_ESCALATE
+          )
+
+          assert (
+              "support humain"
+              in result.user_reply.lower()
+          )
+
+          print(
+              "MISSING AI CONFIGURATION "
+              "SAFELY ESCALATED"
+          )
+          PY
+
+      - name: Test AI user messages
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              SupportAIResult,
+              build_ai_user_message,
+          )
+
+
+          ticket = {
+              "ticket_code": "AV-MSG001",
+              "language": "fr",
+          }
+
+          resolved = SupportAIResult(
+              decision="resolve",
+              summary="Résumé",
+              user_reply="Réponse automatique.",
+              reason="Simple question",
+          )
+
+          need_info = SupportAIResult(
+              decision="need_info",
+              summary="Infos manquantes",
+              user_reply=(
+                  "Quelle offre concerne "
+                  "ta demande ?"
+              ),
+              reason="Missing info",
+          )
+
+          escalated = SupportAIResult(
+              decision="escalate",
+              summary="Humain requis",
+              user_reply=(
+                  "Transmission au support humain."
+              ),
+              reason="Verification required",
+          )
+
+          resolved_text = (
+              build_ai_user_message(
+                  ticket,
+                  resolved,
+              )
+          )
+
+          info_text = build_ai_user_message(
+              ticket,
+              need_info,
+          )
+
+          escalated_text = (
+              build_ai_user_message(
+                  ticket,
+                  escalated,
+              )
+          )
+
+          assert "AV-MSG001" in resolved_text
+          assert (
+              "Réponse automatique"
+              in resolved_text
+          )
+
+          assert "AV-MSG001" in info_text
+          assert (
+              "Quelle offre"
+              in info_text
+          )
+
+          assert (
+              escalated_text
+              == escalated.user_reply
+          )
+
+          print(
+              "AI USER MESSAGE FORMATTING OK"
+          )
+          PY
+
+      - name: Verify AI has no payment mutation capabilities
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "paysupport_ai.py"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          forbidden_imports = (
+              "refundStarsCharge",
+              "activate_premium_subscription",
+              "save_admin_reply",
+              "UPDATE users",
+              "UPDATE premium_subscriptions",
+              "INSERT INTO premium_subscriptions",
+          )
+
+          for marker in forbidden_imports:
+              assert marker not in source, marker
+
+          required_policy = (
+              "MUST escalate",
+              "MUST NOT",
+              "refund",
+              "activate Premium",
+              "grant a Personal Profile",
+              "request Telegram login codes",
+          )
+
+          for marker in required_policy:
+              assert marker in source, marker
+
+          print(
+              "AI PAYMENT MUTATION PROTECTION OK"
+          )
+          PY
+
+      - name: Verify existing systems remain separate
+        run: |
+          test -f paysupport_ai.py
+          test -f paysupport_admin.py
+          test -f paysupport_engine.py
+          test -f paysupport_flow.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f profile_stars_payment.py
+          test -f terms_engine.py
+          test -f bot.py
+
+          echo "AI SUPPORT ENGINE EXISTS"
+          echo "HUMAN SUPPORT PRESERVED"
+          echo "PREMIUM STACK PRESERVED"
+          echo "PROFILE STACK PRESERVED"
+          echo "TERMS PRESERVED"
+          echo "BOT.PY PRESERVED"
+
+      - name: Remove Python cache
+        run: |
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
+      - name: Verify no repository file changed
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final zero cost validation
+        run: |
+          echo "======================================="
+          echo "PAYMENT SUPPORT AI TEST PASSED"
+          echo "======================================="
+          echo "Structured AI result: OK"
+          echo "Safe question resolve: OK"
+          echo "Need-info flow: OK"
+          echo "Sensitive payment escalation: OK"
+          echo "Refund escalation: OK"
+          echo "Subscription escalation: OK"
+          echo "AI failure fallback: OK"
+          echo "Missing AI configuration fallback: OK"
+          echo "French support: OK"
+          echo "English support: OK"
+          echo "Human support preserved: OK"
+          echo "Payment mutation protection: OK"
+          echo "Real OpenAI API calls: 0"
+          echo "Real AI cost: 0"
+          echo "Real Telegram messages: 0"
+          echo "Real Neon writes: 0"
