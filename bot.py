@@ -3771,7 +3771,13 @@ def create_paysupport_ticket(
             ),
         )
 
-        # ASTROVIBE SUPPORT HUMAN ESCALATION
+                # ASTROVIBE SUPPORT AI ROUTING
+        from paysupport_ai import (
+            DECISION_RESOLVE,
+            analyze_support_ticket,
+            build_ai_user_message,
+        )
+
         from paysupport_admin import (
             send_ticket_to_admin,
         )
@@ -3779,31 +3785,101 @@ def create_paysupport_ticket(
         from paysupport_engine import (
             escalate_ticket,
             get_support_ticket,
+            save_ai_analysis,
         )
 
+        ai_result = analyze_support_ticket(
+            ticket
+        )
+
+        if ai_result.decision == DECISION_RESOLVE:
+            ai_saved = save_ai_analysis(
+                get_db_connection,
+                ticket["ticket_code"],
+                ai_summary=(
+                    ai_result.summary
+                ),
+                ai_resolution=(
+                    ai_result.user_reply
+                ),
+                status="resolved",
+            )
+
+            if ai_saved:
+                bot.send_message(
+                    message.chat.id,
+                    build_ai_user_message(
+                        ticket,
+                        ai_result,
+                    ),
+                    reply_markup=(
+                        main_menu(
+                            language
+                        )
+                    ),
+                )
+
+                return
+
+            print(
+                (
+                    "PAYSUPPORT AI SAVE "
+                    "FAILED:"
+                ),
+                ticket["ticket_code"],
+                flush=True,
+            )
+
+        else:
+            save_ai_analysis(
+                get_db_connection,
+                ticket["ticket_code"],
+                ai_summary=(
+                    ai_result.summary
+                ),
+                ai_resolution=(
+                    ai_result.user_reply
+                ),
+                status="ai_processing",
+            )
+
+        # need_info is routed to the human fallback
+        # until a multi-message follow-up flow exists.
         escalated = escalate_ticket(
             get_db_connection,
             ticket["ticket_code"],
+            ai_summary=(
+                ai_result.summary
+            ),
         )
 
         if escalated:
-            escalated_ticket = get_support_ticket(
-                get_db_connection,
-                ticket["ticket_code"],
+            escalated_ticket = (
+                get_support_ticket(
+                    get_db_connection,
+                    ticket["ticket_code"],
+                )
             )
 
             if escalated_ticket:
-                admin_delivery = send_ticket_to_admin(
-                    bot,
-                    escalated_ticket,
+                admin_delivery = (
+                    send_ticket_to_admin(
+                        bot,
+                        escalated_ticket,
+                    )
                 )
 
                 if not admin_delivery.get(
                     "success"
                 ):
                     print(
-                        "PAYSUPPORT ADMIN DELIVERY FAILED:",
-                        admin_delivery.get("reason"),
+                        (
+                            "PAYSUPPORT ADMIN "
+                            "DELIVERY FAILED:"
+                        ),
+                        admin_delivery.get(
+                            "reason"
+                        ),
                         flush=True,
                     )
 
