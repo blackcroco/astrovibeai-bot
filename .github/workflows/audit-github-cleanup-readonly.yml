@@ -14,92 +14,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Verify repository
         run: |
           test -f bot.py
-          test -d .github
           test -d .github/workflows
 
           echo "REPOSITORY READY"
-          echo "CLEANUP AUDIT IS READ ONLY"
+          echo "READ ONLY CLEANUP AUDIT"
 
-      - name: List root workflow files
+      - name: Workflow depth summary
         run: |
-          echo "======================================"
-          echo "ROOT WORKFLOW FILES"
-          echo "======================================"
-
-          find .github/workflows \
-            -maxdepth 1 \
-            -type f \
-            \( \
-              -name "*.yml" \
-              -o -name "*.yaml" \
-            \) \
-            -print \
-            | sort
-
-      - name: List workflow directories
-        run: |
-          echo "======================================"
-          echo "WORKFLOW DIRECTORIES"
-          echo "======================================"
-
-          find .github/workflows \
-            -mindepth 1 \
-            -type d \
-            -print \
-            | sort
-
-      - name: Find nested workflows
-        run: |
-          echo "======================================"
-          echo "NESTED WORKFLOW FILES"
-          echo "======================================"
-
-          find .github/workflows \
-            -mindepth 2 \
-            -type f \
-            \( \
-              -name "*.yml" \
-              -o -name "*.yaml" \
-            \) \
-            -print \
-            | sort
-
-      - name: Inspect parasite workflow folder
-        run: |
-          echo "======================================"
-          echo "PARASITE WORKFLOW FOLDER"
-          echo "======================================"
-
-          if test -d \
-            ".github/workflows/.github/workflows"
-          then
-            echo "PARASITE FOLDER FOUND"
-
-            find \
-              ".github/workflows/.github/workflows" \
-              -type f \
-              -print \
-              | sort
-          else
-            echo "NO EXACT PARASITE FOLDER FOUND"
-          fi
-
-      - name: Count workflow files by depth
-        run: |
-          echo "======================================"
-          echo "WORKFLOW DEPTH SUMMARY"
-          echo "======================================"
-
           python - <<'PY'
           from pathlib import Path
 
-
-          root = Path(
-              ".github/workflows"
-          )
+          root = Path(".github/workflows")
 
           root_files = []
           nested_files = []
@@ -114,18 +47,16 @@ jobs:
               }:
                   continue
 
-              relative = path.relative_to(
-                  root
-              )
+              relative = path.relative_to(root)
 
               if len(relative.parts) == 1:
-                  root_files.append(
-                      str(relative)
-                  )
+                  root_files.append(str(relative))
               else:
-                  nested_files.append(
-                      str(relative)
-                  )
+                  nested_files.append(str(relative))
+
+          print("=" * 40)
+          print("WORKFLOW DEPTH SUMMARY")
+          print("=" * 40)
 
           print(
               "ROOT WORKFLOW COUNT:",
@@ -138,52 +69,30 @@ jobs:
           )
 
           print()
+          print("ROOT WORKFLOWS")
 
-          print(
-              "ROOT WORKFLOWS:"
-          )
-
-          for item in sorted(
-              root_files
-          ):
-              print(
-                  "  ",
-                  item,
-              )
+          for item in sorted(root_files):
+              print("  ", item)
 
           print()
+          print("NESTED WORKFLOWS")
 
-          print(
-              "NESTED WORKFLOWS:"
-          )
+          if not nested_files:
+              print("  none")
 
-          for item in sorted(
-              nested_files
-          ):
-              print(
-                  "  ",
-                  item,
-              )
+          for item in sorted(nested_files):
+              print("  ", item)
           PY
 
-      - name: Find duplicate workflow filenames
+      - name: Duplicate workflow filenames
         run: |
-          echo "======================================"
-          echo "DUPLICATE WORKFLOW FILENAMES"
-          echo "======================================"
-
           python - <<'PY'
           from collections import defaultdict
           from pathlib import Path
 
+          root = Path(".github/workflows")
 
-          root = Path(
-              ".github/workflows"
-          )
-
-          matches = defaultdict(
-              list
-          )
+          files_by_name = defaultdict(list)
 
           for path in root.rglob("*"):
               if not path.is_file():
@@ -195,43 +104,137 @@ jobs:
               }:
                   continue
 
-              matches[
-                  path.name
-              ].append(
+              files_by_name[path.name].append(
                   str(path)
               )
 
-          duplicates = {
-              name: paths
-              for name, paths
-              in matches.items()
-              if len(paths) > 1
-          }
+          print("=" * 40)
+          print("DUPLICATE WORKFLOW FILENAMES")
+          print("=" * 40)
 
-          if not duplicates:
+          found = False
+
+          for name in sorted(files_by_name):
+              paths = files_by_name[name]
+
+              if len(paths) < 2:
+                  continue
+
+              found = True
+
+              print()
+              print("DUPLICATE:", name)
+
+              for path in sorted(paths):
+                  print("  ", path)
+
+          if not found:
               print(
                   "NO DUPLICATE FILENAMES FOUND"
               )
+          PY
 
-          for name in sorted(
-              duplicates
-          ):
-              print(
-                  "DUPLICATE:",
-                  name,
+      - name: Workflow name classification
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path(".github/workflows")
+
+          groups = {
+              "TEST": [],
+              "AUDIT": [],
+              "INTEGRATION": [],
+              "FIX_PATCH": [],
+              "OTHER": [],
+          }
+
+          for path in root.iterdir():
+              if not path.is_file():
+                  continue
+
+              if path.suffix not in {
+                  ".yml",
+                  ".yaml",
+              }:
+                  continue
+
+              name = path.name.lower()
+
+              if name.startswith("test"):
+                  category = "TEST"
+
+              elif name.startswith("audit"):
+                  category = "AUDIT"
+
+              elif name.startswith(
+                  (
+                      "integrate",
+                      "connect",
+                      "switch",
+                      "add-",
+                  )
+              ):
+                  category = "INTEGRATION"
+
+              elif (
+                  name.startswith("fix")
+                  or "patch" in name
+                  or "diagnostic" in name
+                  or "debug" in name
+              ):
+                  category = "FIX_PATCH"
+
+              else:
+                  category = "OTHER"
+
+              groups[category].append(
+                  path.name
               )
 
-              for path in sorted(
-                  duplicates[nameiname "*diagnostic*" \
-              -o -iname "*inspect*" \
-              -o -iname "*verify*" \
-              -o -iname "*fix*" \
-              -o -iname "*patch*" \
-            \) \
-            -print \
-            | sort
+          print("=" * 40)
+          print("WORKFLOW NAME CLASSIFICATION")
+          print("=" * 40)
 
-      - name: Find audit workflow names
+          for category, files in groups.items():
+              print()
+              print(category)
+
+              if not files:
+                  print("  none")
+                  continue
+
+              for filename in sorted(files):
+                  print("  ", filename)
+          PY
+
+      - name: Find workflows with write permissions
+        run: |
+          echo "======================================"
+          echo "WRITE PERMISSION WORKFLOWS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.yml" \
+            --include="*.yaml" \
+            -E 'contents:[[:space:]]*write' \
+            .github/workflows \
+            || true
+
+      - name: Find workflows that push commits
+        run: |
+          echo "======================================"
+          echo "WORKFLOWS THAT PUSH COMMITS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.yml" \
+            --include="*.yaml" \
+            -E 'git push|git commit' \
+            .github/workflows \
+            || true
+
+      - name: Find audit workflow candidates
         run: |
           echo "======================================"
           echo "AUDIT WORKFLOW CANDIDATES"
@@ -240,11 +243,11 @@ jobs:
           find .github/workflows \
             -maxdepth 1 \
             -type f \
-            -iname "audit-*" \
+            -name "audit-*.yml" \
             -print \
             | sort
 
-      - name: Find integration workflow names
+      - name: Find integration workflow candidates
         run: |
           echo "======================================"
           echo "INTEGRATION WORKFLOW CANDIDATES"
@@ -254,10 +257,10 @@ jobs:
             -maxdepth 1 \
             -type f \
             \( \
-              -iname "integrate-*" \
-              -o -iname "connect-*" \
-              -o -iname "switch-*" \
-              -o -iname "add-*" \
+              -name "integrate-*.yml" \
+              -o -name "connect-*.yml" \
+              -o -name "switch-*.yml" \
+              -o -name "add-*.yml" \
             \) \
             -print \
             | sort
@@ -271,7 +274,7 @@ jobs:
           find .github/workflows \
             -maxdepth 1 \
             -type f \
-            -iname "test-*" \
+            -name "test-*.yml" \
             -print \
             | sort
 
@@ -282,28 +285,28 @@ jobs:
           echo "======================================"
 
           grep -nEi \
-            'commands=.*(test|debug|diag)|/profile_test|/location_test|/debug|/diagnostic|_test"' \
+            'profile_test|location_test|debug|diagnostic|test_command|commands=.*test' \
             bot.py \
             || true
 
-      - name: Find temporary diagnostics in Python
+      - name: Find temporary Python markers
         run: |
           echo "======================================"
-          echo "PYTHON DIAGNOSTIC MARKERS"
+          echo "TEMPORARY PYTHON MARKERS"
           echo "======================================"
 
           grep -Rni \
             --include="*.py" \
-            -E 'DEBUG|DIAGNOSTIC|TEMPORARY|TEMP |TEST ONLY|REMOVE AFTER|TODO.*remove|FIXME' \
+            -E 'DEBUG|DIAGNOSTIC|TEMPORARY|TEST ONLY|REMOVE AFTER|FIXME' \
             . \
             --exclude-dir=".git" \
             --exclude-dir="__pycache__" \
             || true
 
-      - name: Find suspicious root workflow files
+      - name: Find YAML outside workflows
         run: |
           echo "======================================"
-          echo "WORKFLOW FILES OUTSIDE WORKFLOW FOLDER"
+          echo "YAML OUTSIDE WORKFLOW DIRECTORY"
           echo "======================================"
 
           find . \
@@ -316,14 +319,6 @@ jobs:
             -not -path "./.github/workflows/*" \
             -print \
             | sort
-
-      - name: Show repository status before verification
-        run: |
-          echo "======================================"
-          echo "REPOSITORY STATUS"
-          echo "======================================"
-
-          git status --short
 
       - name: Prove zero repository changes
         run: |
@@ -345,4 +340,3 @@ jobs:
           echo "Telegram messages: 0"
           echo "Points modified: 0"
           echo "Payments touched: 0"
-          echo "Production deploys triggered: 0"
