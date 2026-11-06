@@ -1402,6 +1402,24 @@ def location_test(message):
 
 @bot.message_handler(commands=["start"])
 def start(message):
+    # ASTROVIBE REFERRAL START CAPTURE
+    try:
+        from referral_engine import (
+            capture_referral_start,
+        )
+
+        capture_referral_start(
+            get_db_connection,
+            message.from_user.id,
+            message.text or "",
+        )
+    except Exception as referral_error:
+        print(
+            "REFERRAL START CAPTURE ERROR:",
+            repr(referral_error),
+            flush=True,
+        )
+
     create_or_update_user(message)
 
     user_id = message.from_user.id
@@ -1993,6 +2011,118 @@ def menu(message):
             message.chat.id,
             get_admin_resolution_text(
                 admin_result
+            ),
+        )
+
+        return
+
+    # ASTROVIBE REFERRAL FINALIZATION
+    try:
+        from referral_engine import (
+            build_referral_reward_message,
+            finalize_pending_referral,
+        )
+
+        referral_result = (
+            finalize_pending_referral(
+                get_db_connection,
+                user_id,
+                calculate_level,
+            )
+        )
+
+        if referral_result.get(
+            "success"
+        ):
+            bot.send_message(
+                referral_result[
+                    "referrer_user_id"
+                ],
+                build_referral_reward_message(
+                    "referrer",
+                    referral_result[
+                        "referrer_reward"
+                    ],
+                    get_user_language(
+                        referral_result[
+                            "referrer_user_id"
+                        ]
+                    ),
+                ),
+            )
+
+            bot.send_message(
+                referral_result[
+                    "referred_user_id"
+                ],
+                build_referral_reward_message(
+                    "referred",
+                    referral_result[
+                        "referred_reward"
+                    ],
+                    language,
+                ),
+            )
+    except Exception as referral_error:
+        print(
+            "REFERRAL FINALIZATION ERROR:",
+            repr(referral_error),
+            flush=True,
+        )
+
+    # ASTROVIBE REFERRAL INVITE ROUTING
+    if command_name == "/invite":
+        from referral_engine import (
+            build_invite_message,
+            get_referral_stats,
+        )
+
+        referral_stats = get_referral_stats(
+            get_db_connection,
+            user_id,
+        )
+
+        invite_text = build_invite_message(
+            user_id,
+            language,
+        )
+
+        if language == "en":
+            invite_text += (
+                "\n\n📊 Successful referrals: "
+                + str(
+                    referral_stats[
+                        "successful_referrals"
+                    ]
+                )
+                + "\n⭐ Referral points earned: "
+                + str(
+                    referral_stats[
+                        "points_earned"
+                    ]
+                )
+            )
+        else:
+            invite_text += (
+                "\n\n📊 Parrainages réussis : "
+                + str(
+                    referral_stats[
+                        "successful_referrals"
+                    ]
+                )
+                + "\n⭐ Points gagnés par parrainage : "
+                + str(
+                    referral_stats[
+                        "points_earned"
+                    ]
+                )
+            )
+
+        bot.send_message(
+            message.chat.id,
+            invite_text,
+            reply_markup=main_menu(
+                language
             ),
         )
 
