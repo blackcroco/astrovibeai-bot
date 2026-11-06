@@ -1,0 +1,428 @@
+name: Audit Points Utility Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-points-utility:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify repository
+        run: |
+          test -f bot.py
+
+          echo "REPOSITORY READY"
+          echo "POINTS UTILITY AUDIT IS READ ONLY"
+
+      - name: Find calculate level references
+        run: |
+          echo "======================================"
+          echo "CALCULATE LEVEL REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'calculate_level|calculate.*level|level.*points|points.*level|niveau.*points|points.*niveau' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Show calculate level context
+        run: |
+          echo "======================================"
+          echo "CALCULATE LEVEL CONTEXT"
+          echo "======================================"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          lines = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          indexes = []
+
+          patterns = (
+              r"def\s+calculate_level",
+              r"calculate_level\(",
+          )
+
+          for index, line in enumerate(lines):
+              if any(
+                  re.search(
+                      pattern,
+                      line,
+                  )
+                  for pattern in patterns
+              ):
+                  indexes.append(index)
+
+          if not indexes:
+              print(
+                  "NO calculate_level REFERENCES FOUND"
+              )
+
+          shown = set()
+
+          for index in indexes:
+              start = max(
+                  index - 20,
+                  0,
+              )
+
+              end = min(
+                  index + 55,
+                  len(lines),
+              )
+
+              key = (
+                  start,
+                  end,
+              )
+
+              if key in shown:
+                  continue
+
+              shown.add(key)
+
+              print(
+                  "--------------------------------------"
+              )
+              print(
+                  "CONTEXT AROUND LINE",
+                  index + 1,
+              )
+              print(
+                  "--------------------------------------"
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      f"{line_number + 1}: "
+                      f"{lines[line_number]}"
+                  )
+          PY
+
+      - name: Find point thresholds
+        run: |
+          echo "======================================"
+          echo "POINT THRESHOLDS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'points[[:space:]]*(>=|>|<=|<|==)[[:space:]]*[0-9]+|[0-9]+[[:space:]]*(<=|<)[[:space:]]*points|next_target|required_points|points_required|point_threshold|threshold.*points|points.*threshold|palier' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find unlock logic
+        run: |
+          echo "======================================"
+          echo "UNLOCK REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'unlock|unlocked|locked|unlockable|débloqu|debloqu|verrouill|level_required|required_level|niveau requis|niveau_requis|minimum_level|min_level' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find point spending logic
+        run: |
+          echo "======================================"
+          echo "POINT SPENDING REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'spend_points|use_points|deduct_points|remove_points|consume_points|redeem_points|redeem|points[[:space:]]*-|points[[:space:]]*-=|points[[:space:]]*=[[:space:]]*points[[:space:]]*-' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find rewards and benefits
+        run: |
+          echo "======================================"
+          echo "REWARD AND BENEFIT REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'reward|rewards|rewarded|récompense|recompense|benefit|benefits|avantage|cadeau|bonus.*level|level.*bonus|niveau.*bonus' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find features gated by level
+        run: |
+          echo "======================================"
+          echo "LEVEL GATED FEATURES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'if .*level|if .*niveau|level >=|level >|niveau >=|niveau >|user_level|current_level|get_level' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find features gated by points
+        run: |
+          echo "======================================"
+          echo "POINT GATED FEATURES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'if .*points|points >=|points >|points <|points <=|current_points.*>=|current_points.*>|current_points.*<' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find show points references
+        run: |
+          echo "======================================"
+          echo "SHOW POINTS REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'show_points|Mes points|My Points|points_command|points_buttons' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Show show points context
+        run: |
+          echo "======================================"
+          echo "SHOW POINTS CONTEXT"
+          echo "======================================"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          lines = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          targets = []
+
+          for index, line in enumerate(lines):
+              if re.search(
+                  r"def\s+show_points",
+                  line,
+              ):
+                  targets.append(index)
+
+          if not targets:
+              print(
+                  "NO show_points FUNCTION FOUND"
+              )
+
+          for index in targets:
+              start = max(
+                  index - 10,
+                  0,
+              )
+
+              end = min(
+                  index + 110,
+                  len(lines),
+              )
+
+              print(
+                  "--------------------------------------"
+              )
+              print(
+                  "SHOW POINTS AROUND LINE",
+                  index + 1,
+              )
+              print(
+                  "--------------------------------------"
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      f"{line_number + 1}: "
+                      f"{lines[line_number]}"
+                  )
+          PY
+
+      - name: Find next target context
+        run: |
+          echo "======================================"
+          echo "NEXT TARGET CONTEXT"
+          echo "======================================"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          lines = Path(
+              "bot.py"
+          ).read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          indexes = [
+              index
+              for index, line
+              in enumerate(lines)
+              if "next_target" in line
+          ]
+
+          if not indexes:
+              print(
+                  "NO next_target FOUND"
+              )
+
+          for index in indexes:
+              start = max(
+                  index - 20,
+                  0,
+              )
+
+              end = min(
+                  index + 35,
+                  len(lines),
+              )
+
+              print(
+                  "--------------------------------------"
+              )
+              print(
+                  "NEXT TARGET AROUND LINE",
+                  index + 1,
+              )
+              print(
+                  "--------------------------------------"
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      f"{line_number + 1}: "
+                      f"{lines[line_number]}"
+                  )
+          PY
+
+      - name: Find level names
+        run: |
+          echo "======================================"
+          echo "LEVEL NAMES AND LABELS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'level_[0-9]|niveau_[0-9]|Level [0-9]|Niveau [0-9]|level name|level_name|niveau.*nom|beginner|explorer|expert|master|débutant|debutant|explorateur|maître|maitre' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find point database mutations
+        run: |
+          echo "======================================"
+          echo "POINT DATABASE MUTATIONS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'UPDATE users|SET[[:space:]]+points|points[[:space:]]*=[[:space:]]*%s|points[[:space:]]*\+|points[[:space:]]*-' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find point related files
+        run: |
+          echo "======================================"
+          echo "POINT RELATED FILES"
+          echo "======================================"
+
+          find . \
+            -type f \
+            \( \
+              -iname "*point*" \
+              -o -iname "*level*" \
+              -o -iname "*reward*" \
+              -o -iname "*unlock*" \
+            \) \
+            -not -path "./.git/*" \
+            -print
+
+      - name: Compile bot
+        run: |
+          python -m py_compile bot.py
+
+          echo "BOT COMPILES"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+      - name: Prove zero repository changes
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          test -z "$(git status --porcelain)"
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final read only confirmation
+        run: |
+          echo "======================================"
+          echo "POINTS UTILITY AUDIT COMPLETE"
+          echo "======================================"
+          echo "Repository writes: 0"
+          echo "Database writes: 0"
+          echo "Points added: 0"
+          echo "Points removed: 0"
+          echo "Levels changed: 0"
+          echo "Telegram messages: 0"
+          echo "Payments touched: 0"
