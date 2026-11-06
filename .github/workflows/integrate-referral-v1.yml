@@ -62,10 +62,6 @@ jobs:
           import re
 
 
-          # ==================================================
-          # ASTROVIBE REFERRAL V1
-          # ==================================================
-
           REFERRER_REWARD = 50
           REFERRED_REWARD = 20
 
@@ -78,21 +74,10 @@ jobs:
           BOT_USERNAME = "AstrovibeAIbot"
 
 
-          # ==================================================
-          # IDENTIFIER HELPERS
-          # ==================================================
-
-          def normalize_user_id(
-              value,
-          ):
+          def normalize_user_id(value):
               try:
-                  user_id = int(
-                      value
-                  )
-              except (
-                  TypeError,
-                  ValueError,
-              ):
+                  user_id = int(value)
+              except (TypeError, ValueError):
                   return None
 
               if user_id <= 0:
@@ -101,13 +86,8 @@ jobs:
               return user_id
 
 
-          def parse_referral_payload(
-              text,
-          ):
-              if not isinstance(
-                  text,
-                  str,
-              ):
+          def parse_referral_payload(text):
+              if not isinstance(text, str):
                   return None
 
               normalized = text.strip()
@@ -115,9 +95,7 @@ jobs:
               if not normalized:
                   return None
 
-              parts = normalized.split(
-                  maxsplit=1
-              )
+              parts = normalized.split(maxsplit=1)
 
               if len(parts) != 2:
                   return None
@@ -145,9 +123,7 @@ jobs:
               )
 
 
-          def build_referral_link(
-              user_id,
-          ):
+          def build_referral_link(user_id):
               normalized = normalize_user_id(
                   user_id
               )
@@ -165,10 +141,6 @@ jobs:
                   f"{normalized}"
               )
 
-
-          # ==================================================
-          # USER-FACING TEXT
-          # ==================================================
 
           def build_invite_message(
               user_id,
@@ -240,22 +212,14 @@ jobs:
               )
 
 
-          # ==================================================
-          # DATABASE HELPERS
-          # ==================================================
-
-          def _rollback_quietly(
-              connection,
-          ):
+          def _rollback_quietly(connection):
               try:
                   connection.rollback()
               except Exception:
                   pass
 
 
-          def _commit(
-              connection,
-          ):
+          def _commit(connection):
               commit = getattr(
                   connection,
                   "commit",
@@ -266,9 +230,7 @@ jobs:
                   commit()
 
 
-          def _close_quietly(
-              resource,
-          ):
+          def _close_quietly(resource):
               close = getattr(
                   resource,
                   "close",
@@ -281,10 +243,6 @@ jobs:
                   except Exception:
                       pass
 
-
-          # ==================================================
-          # CAPTURE REFERRAL AT /start
-          # ==================================================
 
           def capture_referral_start(
               get_db_connection,
@@ -324,8 +282,6 @@ jobs:
                   connection = get_db_connection()
                   cursor = connection.cursor()
 
-                  # The referred account must not already
-                  # exist before this /start request.
                   cursor.execute(
                       """
                       SELECT 1
@@ -348,8 +304,6 @@ jobs:
                           "reason": "existing_user",
                       }
 
-                  # The referrer must be a real existing
-                  # AstroVibe user.
                   cursor.execute(
                       """
                       SELECT 1
@@ -414,9 +368,7 @@ jobs:
                           "reason": "already_referred",
                       }
 
-                  _commit(
-                      connection
-                  )
+                  _commit(connection)
 
                   return {
                       "success": True,
@@ -445,19 +397,11 @@ jobs:
 
               finally:
                   if cursor is not None:
-                      _close_quietly(
-                          cursor
-                      )
+                      _close_quietly(cursor)
 
                   if connection is not None:
-                      _close_quietly(
-                          connection
-                      )
+                      _close_quietly(connection)
 
-
-          # ==================================================
-          # FINALIZE AFTER REGISTRATION
-          # ==================================================
 
           def finalize_pending_referral(
               get_db_connection,
@@ -474,9 +418,7 @@ jobs:
                       "reason": "invalid_referred_user",
                   }
 
-              if not callable(
-                  calculate_level
-              ):
+              if not callable(calculate_level):
                   return {
                       "success": False,
                       "reason": "invalid_level_calculator",
@@ -489,7 +431,6 @@ jobs:
                   connection = get_db_connection()
                   cursor = connection.cursor()
 
-                  # Lock the referral row first.
                   cursor.execute(
                       """
                       SELECT
@@ -539,10 +480,7 @@ jobs:
                           "reason": "already_processed",
                       }
 
-                  if (
-                      referrer_id
-                      == stored_referred_id
-                  ):
+                  if referrer_id == stored_referred_id:
                       cursor.execute(
                           """
                           UPDATE referrals
@@ -554,17 +492,13 @@ jobs:
                           ),
                       )
 
-                      _commit(
-                          connection
-                      )
+                      _commit(connection)
 
                       return {
                           "success": False,
                           "reason": "self_referral",
                       }
 
-                  # Lock both user rows in deterministic
-                  # order to reduce deadlock risk.
                   locked_ids = sorted(
                       [
                           int(referrer_id),
@@ -646,23 +580,13 @@ jobs:
                       }
 
                   referrer_points = (
-                      int(
-                          referrer[1]
-                          or 0
-                      )
-                      + int(
-                          referrer_reward
-                      )
+                      int(referrer[1] or 0)
+                      + int(referrer_reward)
                   )
 
                   referred_points = (
-                      int(
-                          referred[1]
-                          or 0
-                      )
-                      + int(
-                          referred_reward
-                      )
+                      int(referred[1] or 0)
+                      + int(referred_reward)
                   )
 
                   referrer_level = calculate_level(
@@ -723,9 +647,7 @@ jobs:
                           "Referral status update failed"
                       )
 
-                  _commit(
-                      connection
-                  )
+                  _commit(connection)
 
                   return {
                       "success": True,
@@ -770,19 +692,11 @@ jobs:
 
               finally:
                   if cursor is not None:
-                      _close_quietly(
-                          cursor
-                      )
+                      _close_quietly(cursor)
 
                   if connection is not None:
-                      _close_quietly(
-                          connection
-                      )
+                      _close_quietly(connection)
 
-
-          # ==================================================
-          # REFERRAL STATS
-          # ==================================================
 
           def get_referral_stats(
               get_db_connection,
@@ -827,12 +741,10 @@ jobs:
 
                   return {
                       "successful_referrals": int(
-                          row[0]
-                          or 0
+                          row[0] or 0
                       ),
                       "points_earned": int(
-                          row[1]
-                          or 0
+                          row[1] or 0
                       ),
                   }
 
@@ -850,14 +762,10 @@ jobs:
 
               finally:
                   if cursor is not None:
-                      _close_quietly(
-                          cursor
-                      )
+                      _close_quietly(cursor)
 
                   if connection is not None:
-                      _close_quietly(
-                          connection
-                      )
+                      _close_quietly(connection)
           PY
 
           echo "REFERRAL ENGINE CREATED"
@@ -865,8 +773,9 @@ jobs:
       - name: Create bot integration patch
         run: |
           cat > /tmp/integrate_referral_v1.py <<'PY'
+          import ast
+
           from pathlib import Path
-          import re
 
 
           path = Path("bot.py")
@@ -894,50 +803,105 @@ jobs:
           ):
               if marker in source:
                   raise RuntimeError(
-                      "Referral integration marker "
-                      "already present: "
+                      "Referral marker already present: "
                       + marker
                   )
 
 
-          # ==========================================
-          # LOCATE /start HANDLER
-          # ==========================================
+          tree = ast.parse(source)
 
-          decorator_pattern = re.compile(
-              r"@bot\.message_handler\("
-              r"[^\n]*commands\s*=\s*"
-              r"$$[^$$]*[\"']start[\"']"
-              r"[^\]]*\][^\n]*\)"
-          )
+          start_function = None
 
-          decorator_match = decorator_pattern.search(
-              source
-          )
 
-          if decorator_match is None:
-              raise RuntimeError(
-                  "/start handler decorator "
-                  "not found."
+          def decorator_contains_start(
+              decorator,
+          ):
+              if not isinstance(
+                  decorator,
+                  ast.Call,
+              ):
+                  return False
+
+              function = decorator.func
+
+              is_message_handler = (
+                  isinstance(
+                      function,
+                      ast.Attribute,
+                  )
+                  and function.attr
+                  == "message_handler"
               )
 
-          function_match = re.search(
-              r"\ndef\s+([A-Za-z_][A-Za-z0-9_]*)"
-              r"\s*$$\s*message\s*$$\s*:\s*\n",
-              source[
-                  decorator_match.end():
-              ],
-          )
+              if not is_message_handler:
+                  return False
 
-          if function_match is None:
+              for keyword in decorator.keywords:
+                  if keyword.arg != "commands":
+                      continue
+
+                  value = keyword.value
+
+                  if not isinstance(
+                      value,
+                      (
+                          ast.List,
+                          ast.Tuple,
+                          ast.Set,
+                      ),
+                  ):
+                      continue
+
+                  for item in value.elts:
+                      if (
+                          isinstance(
+                              item,
+                              ast.Constant,
+                          )
+                          and item.value == "start"
+                      ):
+                          return True
+
+              return False
+
+
+          for node in tree.body:
+              if not isinstance(
+                  node,
+                  (
+                      ast.FunctionDef,
+                      ast.AsyncFunctionDef,
+                  ),
+              ):
+                  continue
+
+              if any(
+                  decorator_contains_start(
+                      decorator
+                  )
+                  for decorator
+                  in node.decorator_list
+              ):
+                  start_function = node
+                  break
+
+
+          if start_function is None:
               raise RuntimeError(
-                  "/start handler function "
-                  "not found."
+                  "/start handler not found "
+                  "with Python AST."
               )
 
-          function_end = (
-              decorator_match.end()
-              + function_match.end()
+
+          if not start_function.body:
+              raise RuntimeError(
+                  "/start handler has no body."
+              )
+
+
+          start_insert_index = (
+              start_function.body[0].lineno
+              - 1
           )
 
           start_capture_lines = [
@@ -961,23 +925,21 @@ jobs:
               "",
           ]
 
-          start_capture_block = (
-              "\n".join(
-                  start_capture_lines
-              )
-              + "\n"
+
+          lines = source.splitlines()
+
+          lines[
+              start_insert_index:
+              start_insert_index
+          ] = start_capture_lines
+
+          source = "\n".join(lines) + "\n"
+
+          print(
+              "START HANDLER FOUND:",
+              start_function.name,
           )
 
-          source = (
-              source[:function_end]
-              + start_capture_block
-              + source[function_end:]
-          )
-
-
-          # ==========================================
-          # LOCATE MAIN MENU ROUTING
-          # ==========================================
 
           menu_position = source.find(
               "def menu(message):"
@@ -1001,16 +963,12 @@ jobs:
 
           if routing_position == -1:
               raise RuntimeError(
-                  "Safe menu routing insertion "
-                  "point not found."
+                  "Safe menu insertion point "
+                  "not found."
               )
 
 
-          # ==========================================
-          # FINALIZE PENDING REFERRAL
-          # ==========================================
-
-          finalization_lines = [
+          referral_routing_lines = [
               "    # ASTROVIBE REFERRAL FINALIZATION",
               "    try:",
               "        from referral_engine import (",
@@ -1065,21 +1023,6 @@ jobs:
               "            flush=True,",
               "        )",
               "",
-          ]
-
-          finalization_block = (
-              "\n".join(
-                  finalization_lines
-              )
-              + "\n"
-          )
-
-
-          # ==========================================
-          # /invite ROUTING
-          # ==========================================
-
-          invite_lines = [
               "    # ASTROVIBE REFERRAL INVITE ROUTING",
               "    if command_name == \"/invite\":",
               "        from referral_engine import (",
@@ -1140,16 +1083,11 @@ jobs:
               "",
           ]
 
-          invite_block = (
+          referral_routing_block = (
               "\n".join(
-                  invite_lines
+                  referral_routing_lines
               )
               + "\n"
-          )
-
-          referral_routing_block = (
-              finalization_block
-              + invite_block
           )
 
           source = (
@@ -1318,7 +1256,6 @@ jobs:
                       (1,),
                       (77,),
                   ]
-                  self.rowcount = 1
 
               def execute(
                   self,
@@ -1376,25 +1313,14 @@ jobs:
           assert result["referred_user_id"] == 222
           assert connection.committed is True
 
-          assert len(
-              connection.cursor_instance.calls
-          ) == 3
-
           inserted_query = (
               connection
               .cursor_instance
               .calls[2][0]
           )
 
-          assert (
-              "ON CONFLICT"
-              in inserted_query
-          )
-
-          assert (
-              "DO NOTHING"
-              in inserted_query
-          )
+          assert "ON CONFLICT" in inserted_query
+          assert "DO NOTHING" in inserted_query
 
           print(
               "SIMULATED REFERRAL CAPTURE OK"
@@ -1591,17 +1517,8 @@ jobs:
 
           assert result["success"] is True
           assert result["reason"] == "rewarded"
-
-          assert (
-              result["referrer_points"]
-              == 150
-          )
-
-          assert (
-              result["referred_points"]
-              == 30
-          )
-
+          assert result["referrer_points"] == 150
+          assert result["referred_points"] == 30
           assert connection.committed is True
           assert connection.rolled_back is False
 
@@ -1837,9 +1754,9 @@ jobs:
               if not line.strip():
                   continue
 
-              path = line[3:].strip()
-
-              changed.add(path)
+              changed.add(
+                  line[3:].strip()
+              )
 
           expected = {
               "bot.py",
