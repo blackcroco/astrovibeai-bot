@@ -11,7 +11,13 @@ from pydantic import BaseModel
 
 SUPPORT_AI_MODEL_ENV = "SUPPORT_AI_MODEL"
 
-SUPPORT_AI_API_KEY_ENV = "OPENAI_API_KEY"
+SUPPORT_AI_API_KEY_ENV = "GROQ_API_KEY"
+
+SUPPORT_AI_PROVIDER_ENV = "SUPPORT_AI_PROVIDER"
+
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+
+# GROQ FREE AI PROVIDER
 
 
 # ==================================================
@@ -374,7 +380,27 @@ def analyze_support_ticket(
 
         from openai import OpenAI
 
-        client = OpenAI()
+        api_key = os.getenv(
+            SUPPORT_AI_API_KEY_ENV
+        )
+
+        provider = os.getenv(
+            SUPPORT_AI_PROVIDER_ENV,
+            "groq",
+        ).strip().lower()
+
+        if provider != "groq":
+            return build_escalation_fallback(
+                ticket,
+                reason=(
+                    "Unsupported AI provider"
+                ),
+            )
+
+        client = OpenAI(
+            api_key=api_key,
+            base_url=GROQ_BASE_URL,
+        )
 
     if not model:
         return build_escalation_fallback(
