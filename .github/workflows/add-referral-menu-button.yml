@@ -32,7 +32,7 @@ jobs:
 
           echo "REQUIRED FILES OK"
 
-      - name: Verify Referral V1 exists
+      - name: Verify Referral V1
         run: |
           grep -q \
             "ASTROVIBE REFERRAL START CAPTURE" \
@@ -66,9 +66,17 @@ jobs:
             exit 1
           fi
 
-          echo "REFERRAL MENU BUTTON NOT PRESENT"
+          if grep -q \
+            "ASTROVIBE REFERRAL BUTTON ROUTING" \
+            bot.py
+          then
+            echo "Referral button routing already installed."
+            exit 1
+          fi
 
-      - name: Create menu patch
+          echo "REFERRAL BUTTON NOT PRESENT"
+
+      - name: Create robust menu patch
         run: |
           cat > /tmp/add_referral_menu_button.py <<'PY'
           import ast
@@ -81,24 +89,9 @@ jobs:
               encoding="utf-8"
           )
 
-          marker = (
-              "# ASTROVIBE REFERRAL MENU BUTTON"
-          )
-
-          if marker in source:
-              raise RuntimeError(
-                  "Referral menu button "
-                  "already installed."
-              )
-
-
-          # ==========================================
-          # FIND main_menu
-          # ==========================================
-
           tree = ast.parse(source)
 
-          main_menu_function = None
+          main_menu = None
 
           for node in tree.body:
               if (
@@ -108,262 +101,191 @@ jobs:
                   )
                   and node.name == "main_menu"
               ):
-                  main_menu_function = node
+                  main_menu = node
                   break
 
-          if main_menu_function is None:
+          if main_menu is None:
               raise RuntimeError(
                   "main_menu function not found."
               )
 
 
           # ==========================================
-          # LOCATE SETTINGS BUTTON
+          # FIND RETURNED KEYBOARD VARIABLE
           # ==========================================
 
-          function_start = (
-              main_menu_function.lineno - 1
+          return_node = None
+
+          for node in reversed(
+              main_menu.body
+          ):
+              if isinstance(
+                  node,
+                  ast.Return,
+              ):
+                  return_node = node
+                  break
+
+          if return_node is None:
+              raise RuntimeError(
+                  "main_menu return not found."
+              )
+
+          if not isinstance(
+              return_node.value,
+              ast.Name,
+          ):
+              raise RuntimeError(
+                  "main_menu does not return "
+                  "a simple keyboard variable."
+              )
+
+          keyboard_variable = (
+              return_node.value.id
           )
 
-          function_end = (
-              main_menu_function.end_lineno
+          print(
+              "MAIN MENU KEYBOARD VARIABLE:",
+              keyboard_variable,
           )
+
+
+          # ==========================================
+          # VERIFY KEYBOARD VARIABLE IS USED
+          # ==========================================
+
+          keyboard_add_found = False
+
+          for node in ast.walk(
+              main_menu
+          ):
+              if not isinstance(
+                  node,
+                  ast.Call,
+              ):
+                  continue
+
+              function = node.func
+
+              if not isinstance(
+                  function,
+                  ast.Attribute,
+              ):
+                  continue
+
+              owner = function.value
+
+              if (
+                  isinstance(
+                      owner,
+                      ast.Name,
+                  )
+                  and owner.id
+                  == keyboard_variable
+                  and function.attr
+                  in {
+                      "add",
+                      "row",
+                  }
+              ):
+                  keyboard_add_found = True
+                  break
+
+          if not keyboard_add_found:
+              raise RuntimeError(
+                  "Returned keyboard variable "
+                  "has no add/row calls."
+              )
+
+
+          # ==========================================
+          # INSERT BUTTON BEFORE RETURN
+          # ==========================================
 
           lines = source.splitlines()
 
-          function_lines = lines[
-              function_start:function_end
-          ]
-
-          settings_indexes = []
-
-          for relative_index, line in enumerate(
-              function_lines
-          ):
-              if (
-                  "⚙️ Paramètres" in line
-                  or "⚙️ Settings" in line
-              ):
-                  settings_indexes.append(
-                      function_start
-                      + relative_index
-                  )
-
-          if not settings_indexes:
-              raise RuntimeError(
-                  "Settings button text "
-                  "not found inside main_menu."
-              )
-
-
-          # ==========================================
-          # DETECT ADD CALL BEFORE SETTINGS
-          # ==========================================
-
-          settings_index = min(
-              settings_indexes
+          insertion_index = (
+              return_node.lineno - 1
           )
 
-          add_start = None
-
-          for index in range(
-              settings_index,
-              function_start - 1,
-              -1,
-          ):
-              stripped = lines[
-                  index
-              ].strip()
-
-              if (
-                  ".add(" in stripped
-                  or stripped.startswith(
-                      "markup.add("
-                  )
-                  or stripped.startswith(
-                      "keyboard.add("
-                  )
-                  or stripped.startswith(
-                      "menu.add("
-                  )
-              ):
-                  add_start = index
-                  break
-
-          if add_start is None:
-              # Fallback:
-              # Find the nearest InlineKeyboardButton
-              # or KeyboardButton block.
-              for index in range(
-                  settings_index,
-                  function_start - 1,
-                  -1,
-              ):
-                  if (
-                      "KeyboardButton("
-                      in lines[index]
-                      or "InlineKeyboardButton("
-                      in lines[index]
-                  ):
-                      add_start = index
-                      break
-
-          if add_start is None:
-              raise RuntimeError(
-                  "Could not locate settings "
-                  "button insertion point."
+          base_indent = (
+              len(
+                  lines[
+                      insertion_index
+                  ]
               )
-
-
-          # ==========================================
-          # DETECT INDENTATION AND BUTTON TYPE
-          # ==========================================
-
-          reference_line = lines[
-              settings_index
-          ]
-
-          leading = (
-              len(reference_line)
               - len(
-                  reference_line.lstrip()
+                  lines[
+                      insertion_index
+                  ].lstrip()
               )
           )
 
-          text_indent = " " * leading
+          indent = " " * base_indent
 
-          nearby = "\n".join(
-              lines[
-                  max(
-                      add_start - 8,
-                      function_start,
-                  ):
-                  min(
-                      settings_index + 8,
-                      function_end,
-                  )
-              ]
-          )
-
-          if "types.KeyboardButton" in nearby:
-              button_constructor = (
-                  "types.KeyboardButton"
-              )
-          elif "types.InlineKeyboardButton" in nearby:
-              raise RuntimeError(
-                  "main_menu unexpectedly uses "
-                  "inline buttons near settings."
-              )
-          else:
-              button_constructor = (
-                  "types.KeyboardButton"
-              )
-
-
-          # ==========================================
-          # FIND KEYBOARD VARIABLE
-          # ==========================================
-
-          keyboard_variable = None
-
-          candidate_variables = (
-              "markup",
-              "keyboard",
-              "menu",
-              "kb",
-          )
-
-          nearby_before_settings = "\n".join(
-              lines[
-                  function_start:
-                  settings_index + 1
-              ]
-          )
-
-          for candidate in candidate_variables:
-              if (
-                  f"{candidate}.add("
-                  in nearby_before_settings
-              ):
-                  keyboard_variable = candidate
-                  break
-
-          if keyboard_variable is None:
-              raise RuntimeError(
-                  "Keyboard variable not found."
-              )
-
-
-          # ==========================================
-          # INSERT REFERRAL BUTTON
-          # ==========================================
-
-          block_indent = " " * 4
-
-          referral_lines = [
+          button_lines = [
               (
-                  block_indent
+                  indent
                   + "# ASTROVIBE REFERRAL MENU BUTTON"
               ),
               (
-                  block_indent
+                  indent
                   + "if language == \"en\":"
               ),
               (
-                  block_indent
+                  indent
                   + "    referral_button_text = "
-                    "\"🤝 Invite a friend\""
+                  + "\"🤝 Invite a friend\""
               ),
               (
-                  block_indent
+                  indent
                   + "else:"
               ),
               (
-                  block_indent
+                  indent
                   + "    referral_button_text = "
-                    "\"🤝 Inviter un ami\""
+                  + "\"🤝 Inviter un ami\""
               ),
               "",
               (
-                  block_indent
-                  + f"{keyboard_variable}.add("
+                  indent
+                  + f"{keyboard_variable}.row("
               ),
               (
-                  block_indent
-                  + "    "
-                  + button_constructor
-                  + "("
+                  indent
+                  + "    types.KeyboardButton("
               ),
               (
-                  block_indent
+                  indent
                   + "        referral_button_text"
               ),
               (
-                  block_indent
+                  indent
                   + "    )"
               ),
               (
-                  block_indent
+                  indent
                   + ")"
               ),
               "",
           ]
 
           lines[
-              add_start:add_start
-          ] = referral_lines
+              insertion_index:
+              insertion_index
+          ] = button_lines
 
-          updated_source = (
+          updated = (
               "\n".join(lines)
               + "\n"
           )
 
           ast.parse(
-              updated_source
+              updated
           )
 
           path.write_text(
-              updated_source,
+              updated,
               encoding="utf-8",
           )
 
@@ -384,7 +306,7 @@ jobs:
           python \
             /tmp/add_referral_menu_button.py
 
-      - name: Add referral button routing
+      - name: Create button routing patch
         run: |
           cat > /tmp/add_referral_button_routing.py <<'PY'
           from pathlib import Path
@@ -410,17 +332,17 @@ jobs:
               "# ASTROVIBE REFERRAL INVITE ROUTING"
           )
 
-          invite_position = source.find(
+          position = source.find(
               invite_marker
           )
 
-          if invite_position == -1:
+          if position == -1:
               raise RuntimeError(
-                  "Existing /invite routing "
+                  "Existing invite routing "
                   "not found."
               )
 
-          routing_lines = [
+          lines = [
               (
                   "    # ASTROVIBE REFERRAL "
                   "BUTTON ROUTING"
@@ -457,8 +379,8 @@ jobs:
               "                    ]",
               "                )",
               "                + (",
-              "                    \"\\n⭐ Referral points "
-              "                    \"earned: \""
+              "                    \"\\n⭐ Referral points \"",
+              "                    \"earned: \"",
               "                )",
               "                + str(",
               "                    referral_stats[",
@@ -475,8 +397,8 @@ jobs:
               "                    ]",
               "                )",
               "                + (",
-              "                    \"\\n⭐ Points gagnés par "
-              "                    \"parrainage : \""
+              "                    \"\\n⭐ Points gagnés par \"",
+              "                    \"parrainage : \"",
               "                )",
               "                + str(",
               "                    referral_stats[",
@@ -497,21 +419,19 @@ jobs:
               "",
           ]
 
-          routing_block = (
-              "\n".join(
-                  routing_lines
-              )
+          block = (
+              "\n".join(lines)
               + "\n"
           )
 
-          source = (
-              source[:invite_position]
-              + routing_block
-              + source[invite_position:]
+          updated = (
+              source[:position]
+              + block
+              + source[position:]
           )
 
           path.write_text(
-              source,
+              updated,
               encoding="utf-8",
           )
 
@@ -520,18 +440,31 @@ jobs:
           )
           PY
 
+      - name: Validate routing patch
+        run: |
           python -m py_compile \
             /tmp/add_referral_button_routing.py
 
+          echo "ROUTING PATCH VALID"
+
+      - name: Apply button routing patch
+        run: |
           python \
             /tmp/add_referral_button_routing.py
 
-      - name: Compile bot and referral engine
+      - name: Compile production stack
         run: |
           python -m py_compile bot.py
           python -m py_compile referral_engine.py
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_admin.py
+          python -m py_compile paysupport_ai.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile terms_engine.py
 
-          echo "REFERRAL UI COMPILES"
+          echo "PRODUCTION STACK COMPILES"
 
       - name: Verify referral button
         run: |
@@ -551,9 +484,9 @@ jobs:
             "ASTROVIBE REFERRAL BUTTON ROUTING" \
             bot.py
 
-          echo "REFERRAL BUTTON VERIFIED"
+          echo "REFERRAL MENU BUTTON VERIFIED"
 
-      - name: Verify existing invite command preserved
+      - name: Verify invite command preserved
         run: |
           grep -q \
             'command_name == "/invite"' \
@@ -573,7 +506,7 @@ jobs:
 
           echo "/invite PRESERVED"
 
-      - name: Verify Referral V1 security preserved
+      - name: Verify Referral V1 security
         run: |
           grep -q \
             "self_referral" \
@@ -655,7 +588,7 @@ jobs:
           echo "AI SUPPORT PRESERVED"
           echo "HUMAN SUPPORT PRESERVED"
 
-      - name: Verify referral engine does not touch payments
+      - name: Verify payment separation
         run: |
           if grep -Eq \
             'createInvoiceLink|successful_payment|refundStarsCharge|premium_subscriptions|profile_purchases' \
@@ -679,6 +612,8 @@ jobs:
             -type f \
             -name "*.pyc" \
             -delete
+
+          echo "PYTHON CACHE REMOVED"
 
       - name: Verify only bot.py changed
         run: |
@@ -715,7 +650,7 @@ jobs:
           )
           PY
 
-      - name: Show menu changes
+      - name: Show final menu change
         run: |
           git diff -- bot.py
 
