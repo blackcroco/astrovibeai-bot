@@ -1,0 +1,363 @@
+name: Cleanup Obsolete Workflows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-obsolete-workflows:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify repository
+        run: |
+          test -f bot.py
+          test -d .github/workflows
+
+          echo "REPOSITORY READY"
+
+      - name: Verify permanent tests before cleanup
+        run: |
+          ROOT=".github/workflows"
+
+          test -f \
+            "$ROOT/test-paysupport-engine.yml"
+
+          test -f \
+            "$ROOT/test-paysupport-admin.yml"
+
+          test -f \
+            "$ROOT/test-paysupport-ai.yml"
+
+          test -f \
+            "$ROOT/test-premium-end-to-end.yml"
+
+          test -f \
+            "$ROOT/test-premium-stars-payment.yml"
+
+          test -f \
+            "$ROOT/test-profile-purchase-engine.yml"
+
+          echo "PERMANENT TESTS PRESENT"
+
+      - name: Show obsolete candidates
+        run: |
+          ROOT=".github/workflows"
+
+          echo "======================================"
+          echo "OBSOLETE WORKFLOW CANDIDATES"
+          echo "======================================"
+
+          for FILE in \
+            integrate-paysupport.yml \
+            integrate-referral-v1.yml \
+            integrate-terms.yml \
+            connect-paysupport-admin.yml \
+            connect-paysupport-ai.yml \
+            switch-paysupport-ai-to-groq.yml \
+            fix-paysupport-routing.yml \
+            fix-premium-recurring-invoice.yml \
+            fix-premium-subscription-link.yml \
+            fix-terms-routing.yml \
+            diagnose-premium-invoice.yml \
+            recover-latest-valid-bot.yml \
+            restore-bot.yml \
+            revert-broken-commercial-change.yml \
+            upgrade-pytelegrambotapi-premium.yml \
+            add-referral-menu-button.yml \
+            integrate-level-rewards-v1.yml \
+            audit-points-readonly.yml \
+            audit-referral-readonly.yml \
+            audit-points-utility-readonly.yml \
+            audit-github-cleanup-readonly.yml \
+            audit-premium-diagnostics-readonly.yml \
+            cleanup-parasite-workflows.yml \
+            remove-debug-commands.yml
+          do
+            if test -f "$ROOT/$FILE"; then
+              echo "FOUND: $FILE"
+            else
+              echo "NOT PRESENT: $FILE"
+            fi
+          done
+
+      - name: Verify production files
+        run: |
+          test -f bot.py
+          test -f referral_engine.py
+          test -f level_rewards_engine.py
+          test -f paysupport_engine.py
+          test -f paysupport_admin.py
+          test -f paysupport_ai.py
+          test -f premium_engine.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f profile_stars_payment.py
+          test -f terms_engine.py
+
+          echo "PRODUCTION FILES PRESENT"
+
+      - name: Remove obsolete workflows
+        run: |
+          ROOT=".github/workflows"
+
+          for FILE in \
+            integrate-paysupport.yml \
+            integrate-referral-v1.yml \
+            integrate-terms.yml \
+            connect-paysupport-admin.yml \
+            connect-paysupport-ai.yml \
+            switch-paysupport-ai-to-groq.yml \
+            fix-paysupport-routing.yml \
+            fix-premium-recurring-invoice.yml \
+            fix-premium-subscription-link.yml \
+            fix-terms-routing.yml \
+            diagnose-premium-invoice.yml \
+            recover-latest-valid-bot.yml \
+            restore-bot.yml \
+            revert-broken-commercial-change.yml \
+            upgrade-pytelegrambotapi-premium.yml \
+            add-referral-menu-button.yml \
+            integrate-level-rewards-v1.yml \
+            audit-points-readonly.yml \
+            audit-referral-readonly.yml \
+            audit-points-utility-readonly.yml \
+            audit-github-cleanup-readonly.yml \
+            audit-premium-diagnostics-readonly.yml \
+            cleanup-parasite-workflows.yml \
+            remove-debug-commands.yml
+          do
+            if test -f "$ROOT/$FILE"; then
+              git rm "$ROOT/$FILE"
+              echo "REMOVED: $FILE"
+            fi
+          done
+
+          echo "OBSOLETE WORKFLOWS STAGED"
+
+      - name: Verify permanent tests survived
+        run: |
+          ROOT=".github/workflows"
+
+          test -f \
+            "$ROOT/test-paysupport-engine.yml"
+
+          test -f \
+            "$ROOT/test-paysupport-admin.yml"
+
+          test -f \
+            "$ROOT/test-paysupport-ai.yml"
+
+          test -f \
+            "$ROOT/test-premium-end-to-end.yml"
+
+          test -f \
+            "$ROOT/test-premium-stars-payment.yml"
+
+          test -f \
+            "$ROOT/test-profile-purchase-engine.yml"
+
+          echo "PERMANENT TESTS PRESERVED"
+
+      - name: Verify production code untouched
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+                  "--cached",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = [
+              line.strip()
+              for line
+              in result.stdout.splitlines()
+              if line.strip()
+          ]
+
+          workflow_prefix = (
+              ".github/workflows/"
+          )
+
+          unexpected = [
+              path
+              for path in changed
+              if not path.startswith(
+                  workflow_prefix
+              )
+          ]
+
+          assert not unexpected, (
+              "Production files unexpectedly "
+              "staged: "
+              + repr(unexpected)
+          )
+
+          assert changed, (
+              "No obsolete workflows staged"
+          )
+
+          print(
+              "ONLY WORKFLOW FILES STAGED"
+          )
+
+          for path in changed:
+              print(
+                  "STAGED:",
+                  path,
+              )
+          PY
+
+      - name: Compile production stack
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile referral_engine.py
+          python -m py_compile level_rewards_engine.py
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_admin.py
+          python -m py_compile paysupport_ai.py
+          python -m py_compile premium_engine.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile profile_stars_payment.py
+          python -m py_compile terms_engine.py
+
+          echo "PRODUCTION STACK COMPILES"
+
+      - name: Verify production features preserved
+        run: |
+          grep -q \
+            "astrovibe_profile_v2:" \
+            bot.py
+
+          grep -q \
+            "astrovibe_premium:" \
+            bot.py
+
+          grep -q \
+            'command_name == "/terms"' \
+            bot.py
+
+          grep -q \
+            'command_name == "/paysupport"' \
+            bot.py
+
+          grep -q \
+            'command_name == "/supportreply"' \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE SUPPORT AI ROUTING" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL START CAPTURE" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL MENU BUTTON" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE LEVEL REWARDS ROUTING" \
+            bot.py
+
+          echo "PRODUCTION FEATURES PRESERVED"
+
+      - name: Verify Premium logs preserved
+        run: |
+          grep -q \
+            "PREMIUM INVOICE SENT" \
+            bot.py
+
+          grep -q \
+            "PREMIUM INVOICE ERROR:" \
+            bot.py
+
+          grep -q \
+            "PREMIUM DIAGNOSTIC MESSAGE ERROR:" \
+            bot.py
+
+          grep -q \
+            "Premium payment error:" \
+            bot.py
+
+          echo "USEFUL PREMIUM LOGS PRESERVED"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+      - name: Show cleanup summary
+        run: |
+          echo "======================================"
+          echo "WORKFLOW CLEANUP SUMMARY"
+          echo "======================================"
+
+          git status --short
+
+          echo
+          echo "FILES TO DELETE:"
+
+          git diff \
+            --cached \
+            --name-only \
+            --diff-filter=D
+
+      - name: Commit obsolete workflow cleanup
+        run: |
+          if git diff --cached --quiet; then
+            echo "No obsolete workflows to commit."
+            exit 1
+          fi
+
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit \
+            -m "Remove obsolete build and audit workflows"
+
+          git push
+
+      - name: Final validation
+        run: |
+          echo "======================================"
+          echo "OBSOLETE WORKFLOW CLEANUP COMPLETE"
+          echo "======================================"
+          echo "Production code modified: NO"
+          echo "Permanent tests preserved: YES"
+          echo "Premium logs preserved: YES"
+          echo "Database writes: 0"
+          echo "Telegram messages: 0"
+          echo "Payments touched: 0"
