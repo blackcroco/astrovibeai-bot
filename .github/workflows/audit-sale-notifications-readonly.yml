@@ -1,0 +1,382 @@
+name: Audit Sale Notifications Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-sale-notifications:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify payment files
+        run: |
+          test -f bot.py
+          test -f profile_purchase_engine.py
+          test -f premium_subscription_engine.py
+
+          echo "REPOSITORY READY"
+          echo "SALE NOTIFICATION AUDIT IS READ ONLY"
+
+      - name: List payment related files
+        run: |
+          echo "======================================"
+          echo "PAYMENT RELATED FILES"
+          echo "======================================"
+
+          find . \
+            -maxdepth 2 \
+            -type f \
+            \( \
+              -iname "*payment*.py" \
+              -o -iname "*premium*.py" \
+              -o -iname "*profile*.py" \
+            \) \
+            -not -path "./.git/*" \
+            -print \
+            | sort
+
+      - name: Find successful payment handlers
+        run: |
+          echo "======================================"
+          echo "SUCCESSFUL PAYMENT HANDLERS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'successful_payment|process_successful_profile_purchase|process_successful_premium_payment' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find admin configuration
+        run: |
+          echo "======================================"
+          echo "ADMIN CONFIGURATION"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'SUPPORT_ADMIN_TELEGRAM_ID|ADMIN_TELEGRAM_ID|ADMIN_CHAT_ID|ADMIN_ID|admin_user_id|admin_chat_id' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Analyze sale notification paths
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+
+          FILE_PATTERNS = (
+              "*.py",
+          )
+
+          files = []
+
+          for pattern in FILE_PATTERNS:
+              for path in Path(".").rglob(pattern):
+                  if (
+                      ".git" in path.parts
+                      or "__pycache__" in path.parts
+                  ):
+                      continue
+
+                  files.append(path)
+
+
+          profile_terms = (
+              "profile",
+              "profile_purchase",
+              "astrovibe_profile",
+          )
+
+          premium_terms = (
+              "premium",
+              "premium_subscription",
+              "astrovibe_premium",
+          )
+
+          payment_terms = (
+              "successful_payment",
+              "process_successful",
+          )
+
+          admin_terms = (
+              "SUPPORT_ADMIN_TELEGRAM_ID",
+              "ADMIN_TELEGRAM_ID",
+              "ADMIN_CHAT_ID",
+              "ADMIN_ID",
+              "admin_chat_id",
+              "admin_user_id",
+          )
+
+          send_terms = (
+              "send_message(",
+              "send_message (",
+          )
+
+
+          def analyze_context(
+              category_terms,
+          ):
+              evidence = []
+
+              for path in files:
+                  text = path.read_text(
+                      encoding="utf-8",
+                      errors="replace",
+                  )
+
+                  lines = text.splitlines()
+
+                  for index, line in enumerate(lines):
+                      lower_line = line.lower()
+
+                      has_payment = any(
+                          term.lower()
+                          in lower_line
+                          for term in payment_terms
+                      )
+
+                      if not has_payment:
+                          continue
+
+                      start = max(
+                          0,
+                          index - 25,
+                      )
+
+                      end = min(
+                          len(lines),
+                          index + 90,
+                      )
+
+                      block = "\n".join(
+                          lines[start:end]
+                      )
+
+                      block_lower = (
+                          block.lower()
+                      )
+
+                      has_category = any(
+                          term.lower()
+                          in block_lower
+                          for term
+                          in category_terms
+                      )
+
+                      if not has_category:
+                          continue
+
+                      has_admin = any(
+                          term
+                          in block
+                          for term
+                          in admin_terms
+                      )
+
+                      has_send = any(
+                          term
+                          in block
+                          for term
+                          in send_terms
+                      )
+
+                      evidence.append(
+                          {
+                              "file": str(path),
+                              "line": 1}: "
+                          f"{safe_line}"
+                      )
+
+          if not found:
+              print(
+                  "NO PROFILE PAYMENT CONTEXT FOUND"
+              )
+          PY
+
+      - name: Show Premium payment context
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+
+          terms = (
+              "process_successful_premium_payment",
+              "astrovibe_premium",
+              "premium_subscription",
+          )
+
+          print("=" * 40)
+          print("PREMIUM PAYMENT CONTEXT")
+          print("=" * 40)
+
+          found = False
+
+          for path in Path(".").rglob("*.py"):
+              if (
+                  ".git" in path.parts
+                  or "__pycache__"
+                  in path.parts
+              ):
+                  continue
+
+              lines = path.read_text(
+                  encoding="utf-8",
+                  errors="replace",
+              ).splitlines()
+
+              for index, line in enumerate(lines):
+                  if not any(
+                      term.lower()
+                      in line.lower()
+                      for term in terms
+                  ):
+                      continue
+
+                  found = True
+
+                  start = max(
+                      0,
+                      index - 20,
+                  )
+
+                  end = min(
+                      len(lines),
+                      index + 55,
+                  )
+
+                  print()
+                  print(
+                      "FILE:",
+                      path,
+                      "| LINE:",
+                      index + 1,
+                  )
+
+                  for number in range(
+                      start,
+                      end,
+                  ):
+                      safe_line = lines[number]
+
+                      if (
+                          "TOKEN=" in safe_line
+                          or "API_KEY=" in safe_line
+                          or "DATABASE_URL=" in safe_line
+                      ):
+                          safe_line = (
+                              "[SENSITIVE LINE HIDDEN]"
+                          )
+
+                      print(
+                          f"{number + 1}: "
+                          f"{safe_line}"
+                      )
+
+          if not found:
+              print(
+                  "NO PREMIUM PAYMENT CONTEXT FOUND"
+              )
+          PY
+
+      - name: Find admin Telegram sends
+        run: |
+          echo "======================================"
+          echo "ADMIN TELEGRAM SEND REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'send_message.*ADMIN|send_message.*admin|ADMIN.*send_message|SUPPORT_ADMIN_TELEGRAM_ID' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find sale notification wording
+        run: |
+          echo "======================================"
+          echo "SALE NOTIFICATION WORDING"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'nouvel achat|nouvelle vente|nouvel abonnement|new sale|new purchase|new subscription|achat.*valid|vente.*valid|payment.*success|paiement.*réussi|paiement.*reussi' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Compile payment stack
+        run: |
+          python -m py_compile bot.py
+
+          for FILE in \
+            profile_stars_payment.py \
+            profile_purchase_engine.py \
+            premium_stars_payment.py \
+            premium_stars_handlers.py \
+            premium_subscription_engine.py
+          do
+            if test -f "$FILE"; then
+              python -m py_compile "$FILE"
+            fi
+          done
+
+          echo "PAYMENT STACK COMPILES"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Prove zero repository changes
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          test -z "$(git status --porcelain)"
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final read only confirmation
+        run: |
+          echo "======================================"
+          echo "SALE NOTIFICATION AUDIT COMPLETE"
+          echo "======================================"
+          echo "Files modified: 0"
+          echo "Database writes: 0"
+          echo "Telegram messages sent: 0"
+          echo "Payments initiated: 0"
+          echo "Profile rights changed: 0"
+          echo "Premium rights changed: 0"
