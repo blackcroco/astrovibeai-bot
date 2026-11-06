@@ -1792,6 +1792,18 @@ def show_points(message):
             f"{progression_text}"
         )
 
+    # ASTROVIBE LEVEL REWARDS HINT
+    if language == "en":
+        message_text += (
+            "\n\n🎁 Use /rewards to view "
+            "your unlocked level rewards."
+        )
+    else:
+        message_text += (
+            "\n\n🎁 Utilise /rewards pour "
+            "voir tes récompenses de niveau."
+        )
+
     bot.send_message(
         message.chat.id,
         message_text,
@@ -2082,7 +2094,76 @@ def menu(message):
             flush=True,
         )
 
-        # ASTROVIBE REFERRAL BUTTON ROUTING
+            # ASTROVIBE LEVEL REWARDS ROUTING
+    if command_name in (
+        "/rewards",
+        "/recompenses",
+    ):
+        from level_rewards_engine import (
+            build_rewards_summary,
+            build_unlocked_content,
+        )
+
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT
+                            points,
+                            sign
+                        FROM users
+                        WHERE telegram_id = %s
+                        """,
+                        (user_id,),
+                    )
+
+                    reward_user = (
+                        cursor.fetchone()
+                    )
+        except Exception as reward_error:
+            print(
+                "LEVEL REWARDS READ ERROR:",
+                repr(reward_error),
+                flush=True,
+            )
+
+            reward_user = None
+
+        reward_points = 0
+        reward_sign = None
+
+        if reward_user:
+            reward_points = int(
+                reward_user[0] or 0
+            )
+
+            reward_sign = reward_user[1]
+
+        reward_message = (
+            build_rewards_summary(
+                reward_points,
+                language,
+            )
+            + "\n\n"
+            + build_unlocked_content(
+                reward_points,
+                reward_sign,
+                language,
+            )
+        )
+
+        bot.send_message(
+            message.chat.id,
+            reward_message,
+            reply_markup=main_menu(
+                language
+            ),
+        )
+
+        return
+
+# ASTROVIBE REFERRAL BUTTON ROUTING
     if message_text in (
         "🤝 Inviter un ami",
         "🤝 Invite a friend",
