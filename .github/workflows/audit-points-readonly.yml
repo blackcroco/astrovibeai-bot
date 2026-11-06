@@ -1,0 +1,225 @@
+name: Audit Points Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-points:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify repository
+        run: |
+          test -f bot.py
+
+          echo "REPOSITORY READY"
+          echo "READ ONLY AUDIT"
+
+      - name: Find points references
+        run: |
+          echo "======================================"
+          echo "POINTS REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'points|point_balance|user_points|add_points|remove_points|award_points|points_buttons' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find daily bonus references
+        run: |
+          echo "======================================"
+          echo "DAILY BONUS REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'bonus|daily_bonus|bonus_daily|claim_bonus|bonus_buttons' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find streak references
+        run: |
+          echo "======================================"
+          echo "STREAK REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'streak|daily_streak|login_streak|bonus_streak' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find referral references
+        run: |
+          echo "======================================"
+          echo "REFERRAL REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'referral|referrer|referred|ref_code|referral_code|parrain|filleul|invite' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find database columns related to rewards
+        run: |
+          echo "======================================"
+          echo "DATABASE REWARD REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'SELECT .*points|UPDATE .*points|INSERT .*points|SET points|bonus|streak|referral|referrer' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Inspect reward mutations
+        run: |
+          echo "======================================"
+          echo "POSSIBLE POINT MUTATIONS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'points[[:space:]]*=|points[[:space:]]*\+|points[[:space:]]*-|points[[:space:]]*\+=|points[[:space:]]*-=' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Inspect time protections
+        run: |
+          echo "======================================"
+          echo "TIME AND BONUS PROTECTIONS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'last_bonus|last_daily|last_claim|claimed_at|last_reward|24 hours|timedelta|date$$$$|datetime|CURRENT_DATE|CURRENT_TIMESTAMP' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Inspect referral protections
+        run: |
+          echo "======================================"
+          echo "REFERRAL PROTECTION REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'referrer.*user_id|user_id.*referrer|already.*ref|referred_by|referral_used|UNIQUE.*ref|self.*ref|ref.*self' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Inspect menu integration
+        run: |
+          echo "======================================"
+          echo "MENU INTEGRATION"
+          echo "======================================"
+
+          grep -n \
+            -E 'points_buttons|bonus_buttons|Mes points|My Points|Bonus quotidien|Daily Bonus|Parrain|Referral' \
+            bot.py \
+            || true
+
+      - name: Find reward related files
+        run: |
+          echo "======================================"
+          echo "REWARD RELATED FILES"
+          echo "======================================"
+
+          find . \
+            -type f \
+            \( \
+              -iname "*point*" \
+              -o -iname "*bonus*" \
+              -o -iname "*streak*" \
+              -o -iname "*referral*" \
+              -o -iname "*parrain*" \
+            \) \
+            -not -path "./.git/*" \
+            -print
+
+      - name: Compile Python files
+        run: |
+          python -m py_compile bot.py
+
+          for file in \
+            *point*.py \
+            *bonus*.py \
+            *streak*.py \
+            *referral*.py \
+            *parrain*.py
+          do
+            if [ -f "$file" ]; then
+              python -m py_compile "$file"
+            fi
+          done
+
+          echo "REWARD FILES COMPILE"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+      - name: Prove zero repository changes
+        run: |
+          echo "======================================"
+          echo "ZERO CHANGE CHECK"
+          echo "======================================"
+
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          test -z "$(git status --porcelain)"
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final read only confirmation
+        run: |
+          echo "======================================"
+          echo "POINTS AUDIT READ ONLY COMPLETE"
+          echo "======================================"
+          echo "Files modified: 0"
+          echo "Database writes: 0"
+          echo "Telegram messages: 0"
+          echo "Points awarded: 0"
+          echo "Points removed: 0"
+          echo "Referral rewards: 0"
+          echo "Payments touched: 0"
