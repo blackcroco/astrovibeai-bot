@@ -1,0 +1,742 @@
+name: Add Referral Menu Button
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  add-referral-menu-button:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f bot.py
+          test -f referral_engine.py
+          test -f paysupport_engine.py
+          test -f paysupport_admin.py
+          test -f paysupport_ai.py
+          test -f premium_subscription_engine.py
+          test -f profile_purchase_engine.py
+          test -f terms_engine.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Verify Referral V1 exists
+        run: |
+          grep -q \
+            "ASTROVIBE REFERRAL START CAPTURE" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL FINALIZATION" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL INVITE ROUTING" \
+            bot.py
+
+          grep -q \
+            'command_name == "/invite"' \
+            bot.py
+
+          grep -q \
+            "build_invite_message" \
+            bot.py
+
+          echo "REFERRAL V1 FOUND"
+
+      - name: Verify button not already installed
+        run: |
+          if grep -q \
+            "ASTROVIBE REFERRAL MENU BUTTON" \
+            bot.py
+          then
+            echo "Referral menu button already installed."
+            exit 1
+          fi
+
+          echo "REFERRAL MENU BUTTON NOT PRESENT"
+
+      - name: Create menu patch
+        run: |
+          cat > /tmp/add_referral_menu_button.py <<'PY'
+          import ast
+          from pathlib import Path
+
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE REFERRAL MENU BUTTON"
+          )
+
+          if marker in source:
+              raise RuntimeError(
+                  "Referral menu button "
+                  "already installed."
+              )
+
+
+          # ==========================================
+          # FIND main_menu
+          # ==========================================
+
+          tree = ast.parse(source)
+
+          main_menu_function = None
+
+          for node in tree.body:
+              if (
+                  isinstance(
+                      node,
+                      ast.FunctionDef,
+                  )
+                  and node.name == "main_menu"
+              ):
+                  main_menu_function = node
+                  break
+
+          if main_menu_function is None:
+              raise RuntimeError(
+                  "main_menu function not found."
+              )
+
+
+          # ==========================================
+          # LOCATE SETTINGS BUTTON
+          # ==========================================
+
+          function_start = (
+              main_menu_function.lineno - 1
+          )
+
+          function_end = (
+              main_menu_function.end_lineno
+          )
+
+          lines = source.splitlines()
+
+          function_lines = lines[
+              function_start:function_end
+          ]
+
+          settings_indexes = []
+
+          for relative_index, line in enumerate(
+              function_lines
+          ):
+              if (
+                  "⚙️ Paramètres" in line
+                  or "⚙️ Settings" in line
+              ):
+                  settings_indexes.append(
+                      function_start
+                      + relative_index
+                  )
+
+          if not settings_indexes:
+              raise RuntimeError(
+                  "Settings button text "
+                  "not found inside main_menu."
+              )
+
+
+          # ==========================================
+          # DETECT ADD CALL BEFORE SETTINGS
+          # ==========================================
+
+          settings_index = min(
+              settings_indexes
+          )
+
+          add_start = None
+
+          for index in range(
+              settings_index,
+              function_start - 1,
+              -1,
+          ):
+              stripped = lines[
+                  index
+              ].strip()
+
+              if (
+                  ".add(" in stripped
+                  or stripped.startswith(
+                      "markup.add("
+                  )
+                  or stripped.startswith(
+                      "keyboard.add("
+                  )
+                  or stripped.startswith(
+                      "menu.add("
+                  )
+              ):
+                  add_start = index
+                  break
+
+          if add_start is None:
+              # Fallback:
+              # Find the nearest InlineKeyboardButton
+              # or KeyboardButton block.
+              for index in range(
+                  settings_index,
+                  function_start - 1,
+                  -1,
+              ):
+                  if (
+                      "KeyboardButton("
+                      in lines[index]
+                      or "InlineKeyboardButton("
+                      in lines[index]
+                  ):
+                      add_start = index
+                      break
+
+          if add_start is None:
+              raise RuntimeError(
+                  "Could not locate settings "
+                  "button insertion point."
+              )
+
+
+          # ==========================================
+          # DETECT INDENTATION AND BUTTON TYPE
+          # ==========================================
+
+          reference_line = lines[
+              settings_index
+          ]
+
+          leading = (
+              len(reference_line)
+              - len(
+                  reference_line.lstrip()
+              )
+          )
+
+          text_indent = " " * leading
+
+          nearby = "\n".join(
+              lines[
+                  max(
+                      add_start - 8,
+                      function_start,
+                  ):
+                  min(
+                      settings_index + 8,
+                      function_end,
+                  )
+              ]
+          )
+
+          if "types.KeyboardButton" in nearby:
+              button_constructor = (
+                  "types.KeyboardButton"
+              )
+          elif "types.InlineKeyboardButton" in nearby:
+              raise RuntimeError(
+                  "main_menu unexpectedly uses "
+                  "inline buttons near settings."
+              )
+          else:
+              button_constructor = (
+                  "types.KeyboardButton"
+              )
+
+
+          # ==========================================
+          # FIND KEYBOARD VARIABLE
+          # ==========================================
+
+          keyboard_variable = None
+
+          candidate_variables = (
+              "markup",
+              "keyboard",
+              "menu",
+              "kb",
+          )
+
+          nearby_before_settings = "\n".join(
+              lines[
+                  function_start:
+                  settings_index + 1
+              ]
+          )
+
+          for candidate in candidate_variables:
+              if (
+                  f"{candidate}.add("
+                  in nearby_before_settings
+              ):
+                  keyboard_variable = candidate
+                  break
+
+          if keyboard_variable is None:
+              raise RuntimeError(
+                  "Keyboard variable not found."
+              )
+
+
+          # ==========================================
+          # INSERT REFERRAL BUTTON
+          # ==========================================
+
+          block_indent = " " * 4
+
+          referral_lines = [
+              (
+                  block_indent
+                  + "# ASTROVIBE REFERRAL MENU BUTTON"
+              ),
+              (
+                  block_indent
+                  + "if language == \"en\":"
+              ),
+              (
+                  block_indent
+                  + "    referral_button_text = "
+                    "\"🤝 Invite a friend\""
+              ),
+              (
+                  block_indent
+                  + "else:"
+              ),
+              (
+                  block_indent
+                  + "    referral_button_text = "
+                    "\"🤝 Inviter un ami\""
+              ),
+              "",
+              (
+                  block_indent
+                  + f"{keyboard_variable}.add("
+              ),
+              (
+                  block_indent
+                  + "    "
+                  + button_constructor
+                  + "("
+              ),
+              (
+                  block_indent
+                  + "        referral_button_text"
+              ),
+              (
+                  block_indent
+                  + "    )"
+              ),
+              (
+                  block_indent
+                  + ")"
+              ),
+              "",
+          ]
+
+          lines[
+              add_start:add_start
+          ] = referral_lines
+
+          updated_source = (
+              "\n".join(lines)
+              + "\n"
+          )
+
+          ast.parse(
+              updated_source
+          )
+
+          path.write_text(
+              updated_source,
+              encoding="utf-8",
+          )
+
+          print(
+              "REFERRAL MENU BUTTON ADDED"
+          )
+          PY
+
+      - name: Validate menu patch
+        run: |
+          python -m py_compile \
+            /tmp/add_referral_menu_button.py
+
+          echo "MENU PATCH VALID"
+
+      - name: Apply menu patch
+        run: |
+          python \
+            /tmp/add_referral_menu_button.py
+
+      - name: Add referral button routing
+        run: |
+          cat > /tmp/add_referral_button_routing.py <<'PY'
+          from pathlib import Path
+
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          marker = (
+              "# ASTROVIBE REFERRAL BUTTON ROUTING"
+          )
+
+          if marker in source:
+              raise RuntimeError(
+                  "Referral button routing "
+                  "already installed."
+              )
+
+          invite_marker = (
+              "# ASTROVIBE REFERRAL INVITE ROUTING"
+          )
+
+          invite_position = source.find(
+              invite_marker
+          )
+
+          if invite_position == -1:
+              raise RuntimeError(
+                  "Existing /invite routing "
+                  "not found."
+              )
+
+          routing_lines = [
+              (
+                  "    # ASTROVIBE REFERRAL "
+                  "BUTTON ROUTING"
+              ),
+              "    if message_text in (",
+              "        \"🤝 Inviter un ami\",",
+              "        \"🤝 Invite a friend\",",
+              "    ):",
+              "        from referral_engine import (",
+              "            build_invite_message,",
+              "            get_referral_stats,",
+              "        )",
+              "",
+              "        referral_stats = (",
+              "            get_referral_stats(",
+              "                get_db_connection,",
+              "                user_id,",
+              "            )",
+              "        )",
+              "",
+              "        invite_text = (",
+              "            build_invite_message(",
+              "                user_id,",
+              "                language,",
+              "            )",
+              "        )",
+              "",
+              "        if language == \"en\":",
+              "            invite_text += (",
+              "                \"\\n\\n📊 Successful referrals: \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"successful_referrals\"",
+              "                    ]",
+              "                )",
+              "                + (",
+              "                    \"\\n⭐ Referral points "
+              "                    \"earned: \""
+              "                )",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"points_earned\"",
+              "                    ]",
+              "                )",
+              "            )",
+              "        else:",
+              "            invite_text += (",
+              "                \"\\n\\n📊 Parrainages réussis : \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"successful_referrals\"",
+              "                    ]",
+              "                )",
+              "                + (",
+              "                    \"\\n⭐ Points gagnés par "
+              "                    \"parrainage : \""
+              "                )",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"points_earned\"",
+              "                    ]",
+              "                )",
+              "            )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            invite_text,",
+              "            reply_markup=main_menu(",
+              "                language",
+              "            ),",
+              "        )",
+              "",
+              "        return",
+              "",
+          ]
+
+          routing_block = (
+              "\n".join(
+                  routing_lines
+              )
+              + "\n"
+          )
+
+          source = (
+              source[:invite_position]
+              + routing_block
+              + source[invite_position:]
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8",
+          )
+
+          print(
+              "REFERRAL BUTTON ROUTING ADDED"
+          )
+          PY
+
+          python -m py_compile \
+            /tmp/add_referral_button_routing.py
+
+          python \
+            /tmp/add_referral_button_routing.py
+
+      - name: Compile bot and referral engine
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile referral_engine.py
+
+          echo "REFERRAL UI COMPILES"
+
+      - name: Verify referral button
+        run: |
+          grep -q \
+            "ASTROVIBE REFERRAL MENU BUTTON" \
+            bot.py
+
+          grep -q \
+            "🤝 Inviter un ami" \
+            bot.py
+
+          grep -q \
+            "🤝 Invite a friend" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL BUTTON ROUTING" \
+            bot.py
+
+          echo "REFERRAL BUTTON VERIFIED"
+
+      - name: Verify existing invite command preserved
+        run: |
+          grep -q \
+            'command_name == "/invite"' \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL INVITE ROUTING" \
+            bot.py
+
+          grep -q \
+            "build_invite_message" \
+            bot.py
+
+          grep -q \
+            "get_referral_stats" \
+            bot.py
+
+          echo "/invite PRESERVED"
+
+      - name: Verify Referral V1 security preserved
+        run: |
+          grep -q \
+            "self_referral" \
+            referral_engine.py
+
+          grep -q \
+            "existing_user" \
+            referral_engine.py
+
+          grep -q \
+            "ON CONFLICT" \
+            referral_engine.py
+
+          grep -q \
+            "FOR UPDATE" \
+            referral_engine.py
+
+          grep -q \
+            "registration_incomplete" \
+            referral_engine.py
+
+          echo "REFERRAL SECURITY PRESERVED"
+
+      - name: Verify Profile preserved
+        run: |
+          grep -q \
+            "astrovibe_profile_v2:" \
+            bot.py
+
+          grep -q \
+            "process_successful_profile_purchase" \
+            bot.py
+
+          grep -q \
+            "send_personal_profile" \
+            bot.py
+
+          echo "PROFILE 390 STARS PRESERVED"
+
+      - name: Verify Premium preserved
+        run: |
+          grep -q \
+            "astrovibe_premium:" \
+            bot.py
+
+          grep -q \
+            "createInvoiceLink" \
+            bot.py
+
+          grep -q \
+            "process_successful_premium_payment" \
+            bot.py
+
+          echo "PREMIUM 199 STARS PRESERVED"
+
+      - name: Verify support and terms preserved
+        run: |
+          grep -q \
+            'command_name == "/terms"' \
+            bot.py
+
+          grep -q \
+            'command_name == "/paysupport"' \
+            bot.py
+
+          grep -q \
+            'command_name == "/supportreply"' \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE SUPPORT AI ROUTING" \
+            bot.py
+
+          grep -q \
+            "send_ticket_to_admin" \
+            bot.py
+
+          echo "TERMS PRESERVED"
+          echo "AI SUPPORT PRESERVED"
+          echo "HUMAN SUPPORT PRESERVED"
+
+      - name: Verify referral engine does not touch payments
+        run: |
+          if grep -Eq \
+            'createInvoiceLink|successful_payment|refundStarsCharge|premium_subscriptions|profile_purchases' \
+            referral_engine.py
+          then
+            echo "Referral engine touches payments."
+            exit 1
+          fi
+
+          echo "PAYMENT SYSTEMS SEPARATE"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+      - name: Verify only bot.py changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = {
+              line.strip()
+              for line
+              in result.stdout.splitlines()
+              if line.strip()
+          }
+
+          assert changed == {
+              "bot.py"
+          }, (
+              "Unexpected changed files: "
+              + repr(sorted(changed))
+          )
+
+          print(
+              "ONLY BOT.PY CHANGED"
+          )
+          PY
+
+      - name: Show menu changes
+        run: |
+          git diff -- bot.py
+
+      - name: Commit referral menu button
+        run: |
+          git add bot.py
+
+          if git diff --cached --quiet; then
+            echo "No bot.py changes."
+            exit 1
+          fi
+
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit \
+            -m "Add referral button to AstroVibe menu"
+
+          git push
