@@ -1,0 +1,1878 @@
+name: Integrate Referral V1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-referral-v1:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f bot.py
+          test -f requirements.txt
+          test -f paysupport_engine.py
+          test -f paysupport_admin.py
+          test -f paysupport_ai.py
+          test -f premium_subscription_engine.py
+          test -f profile_purchase_engine.py
+          test -f terms_engine.py
+
+          echo "REQUIRED FILES OK"
+
+      - name: Verify referral is not already integrated
+        run: |
+          if test -f referral_engine.py; then
+            echo "referral_engine.py already exists."
+            exit 1
+          fi
+
+          if grep -q "ASTROVIBE REFERRAL START CAPTURE" bot.py; then
+            echo "Referral start capture already exists."
+            exit 1
+          fi
+
+          if grep -q "ASTROVIBE REFERRAL FINALIZATION" bot.py; then
+            echo "Referral finalization already exists."
+            exit 1
+          fi
+
+          if grep -q 'command_name == "/invite"' bot.py; then
+            echo "Invite routing already exists."
+            exit 1
+          fi
+
+          echo "REFERRAL INTEGRATION NOT PRESENT"
+
+      - name: Create referral engine
+        run: |
+          cat > referral_engine.py <<'PY'
+          import re
+
+
+          # ==================================================
+          # ASTROVIBE REFERRAL V1
+          # ==================================================
+
+          REFERRER_REWARD = 50
+          REFERRED_REWARD = 20
+
+          REFERRAL_PREFIX = "ref_"
+
+          REFERRAL_STATUS_PENDING = "pending"
+          REFERRAL_STATUS_REWARDED = "rewarded"
+          REFERRAL_STATUS_REJECTED = "rejected"
+
+          BOT_USERNAME = "AstrovibeAIbot"
+
+
+          # ==================================================
+          # IDENTIFIER HELPERS
+          # ==================================================
+
+          def normalize_user_id(
+              value,
+          ):
+              try:
+                  user_id = int(
+                      value
+                  )
+              except (
+                  TypeError,
+                  ValueError,
+              ):
+                  return None
+
+              if user_id <= 0:
+                  return None
+
+              return user_id
+
+
+          def parse_referral_payload(
+              text,
+          ):
+              if not isinstance(
+                  text,
+                  str,
+              ):
+                  return None
+
+              normalized = text.strip()
+
+              if not normalized:
+                  return None
+
+              parts = normalized.split(
+                  maxsplit=1
+              )
+
+              if len(parts) != 2:
+                  return None
+
+              command = parts[0].split(
+                  "@",
+                  1,
+              )[0].lower()
+
+              if command != "/start":
+                  return None
+
+              payload = parts[1].strip()
+
+              match = re.fullmatch(
+                  r"ref_([1-9][0-9]*)",
+                  payload,
+              )
+
+              if match is None:
+                  return None
+
+              return normalize_user_id(
+                  match.group(1)
+              )
+
+
+          def build_referral_link(
+              user_id,
+          ):
+              normalized = normalize_user_id(
+                  user_id
+              )
+
+              if normalized is None:
+                  raise ValueError(
+                      "Invalid referral user ID"
+                  )
+
+              return (
+                  "https://t.me/"
+                  f"{BOT_USERNAME}"
+                  "?start="
+                  f"{REFERRAL_PREFIX}"
+                  f"{normalized}"
+              )
+
+
+          # ==================================================
+          # USER-FACING TEXT
+          # ==================================================
+
+          def build_invite_message(
+              user_id,
+              language="fr",
+          ):
+              link = build_referral_link(
+                  user_id
+              )
+
+              if language == "en":
+                  return (
+                      "🤝 Invite your friends to AstroVibe\n\n"
+                      "Share your personal link:\n\n"
+                      f"{link}\n\n"
+                      "🎁 Your friend receives "
+                      f"{REFERRED_REWARD} welcome points.\n"
+                      "⭐ You receive "
+                      f"{REFERRER_REWARD} points when their "
+                      "AstroVibe registration is completed.\n\n"
+                      "Only genuine new AstroVibe users "
+                      "are eligible."
+                  )
+
+              return (
+                  "🤝 Invite tes amis sur AstroVibe\n\n"
+                  "Partage ton lien personnel :\n\n"
+                  f"{link}\n\n"
+                  "🎁 Ton ami reçoit "
+                  f"{REFERRED_REWARD} points de bienvenue.\n"
+                  "⭐ Tu reçois "
+                  f"{REFERRER_REWARD} points lorsque son "
+                  "inscription AstroVibe est terminée.\n\n"
+                  "Seuls les nouveaux utilisateurs "
+                  "AstroVibe réels sont éligibles."
+              )
+
+
+          def build_referral_reward_message(
+              role,
+              points,
+              language="fr",
+          ):
+              if language == "en":
+                  if role == "referrer":
+                      return (
+                          "🎉 AstroVibe referral validated!\n\n"
+                          f"You earned {points} points because "
+                          "your friend completed their "
+                          "registration."
+                      )
+
+                  return (
+                      "🎁 Welcome to AstroVibe!\n\n"
+                      f"You received {points} welcome points "
+                      "through a valid referral."
+                  )
+
+              if role == "referrer":
+                  return (
+                      "🎉 Parrainage AstroVibe validé !\n\n"
+                      f"Tu as gagné {points} points car ton ami "
+                      "a terminé son inscription."
+                  )
+
+              return (
+                  "🎁 Bienvenue sur AstroVibe !\n\n"
+                  f"Tu as reçu {points} points de bienvenue "
+                  "grâce à un parrainage valide."
+              )
+
+
+          # ==================================================
+          # DATABASE HELPERS
+          # ==================================================
+
+          def _rollback_quietly(
+              connection,
+          ):
+              try:
+                  connection.rollback()
+              except Exception:
+                  pass
+
+
+          def _commit(
+              connection,
+          ):
+              commit = getattr(
+                  connection,
+                  "commit",
+                  None,
+              )
+
+              if callable(commit):
+                  commit()
+
+
+          def _close_quietly(
+              resource,
+          ):
+              close = getattr(
+                  resource,
+                  "close",
+                  None,
+              )
+
+              if callable(close):
+                  try:
+                      close()
+                  except Exception:
+                      pass
+
+
+          # ==================================================
+          # CAPTURE REFERRAL AT /start
+          # ==================================================
+
+          def capture_referral_start(
+              get_db_connection,
+              referred_user_id,
+              command_text,
+          ):
+              referred_id = normalize_user_id(
+                  referred_user_id
+              )
+
+              referrer_id = parse_referral_payload(
+                  command_text
+              )
+
+              if referred_id is None:
+                  return {
+                      "success": False,
+                      "reason": "invalid_referred_user",
+                  }
+
+              if referrer_id is None:
+                  return {
+                      "success": False,
+                      "reason": "no_referral_payload",
+                  }
+
+              if referrer_id == referred_id:
+                  return {
+                      "success": False,
+                      "reason": "self_referral",
+                  }
+
+              connection = None
+              cursor = None
+
+              try:
+                  connection = get_db_connection()
+                  cursor = connection.cursor()
+
+                  # The referred account must not already
+                  # exist before this /start request.
+                  cursor.execute(
+                      """
+                      SELECT 1
+                      FROM users
+                      WHERE telegram_id = %s
+                      LIMIT 1
+                      """,
+                      (
+                          referred_id,
+                      ),
+                  )
+
+                  if cursor.fetchone():
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "existing_user",
+                      }
+
+                  # The referrer must be a real existing
+                  # AstroVibe user.
+                  cursor.execute(
+                      """
+                      SELECT 1
+                      FROM users
+                      WHERE telegram_id = %s
+                      LIMIT 1
+                      """,
+                      (
+                          referrer_id,
+                      ),
+                  )
+
+                  if not cursor.fetchone():
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "referrer_not_found",
+                      }
+
+                  cursor.execute(
+                      """
+                      INSERT INTO referrals (
+                          referrer_user_id,
+                          referred_user_id,
+                          referrer_reward,
+                          referred_reward,
+                          status
+                      )
+                      VALUES (
+                          %s,
+                          %s,
+                          %s,
+                          %s,
+                          'pending'
+                      )
+                      ON CONFLICT (
+                          referred_user_id
+                      )
+                      DO NOTHING
+                      RETURNING id
+                      """,
+                      (
+                          referrer_id,
+                          referred_id,
+                          REFERRER_REWARD,
+                          REFERRED_REWARD,
+                      ),
+                  )
+
+                  inserted = cursor.fetchone()
+
+                  if not inserted:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "already_referred",
+                      }
+
+                  _commit(
+                      connection
+                  )
+
+                  return {
+                      "success": True,
+                      "reason": "pending_created",
+                      "referral_id": inserted[0],
+                      "referrer_user_id": referrer_id,
+                      "referred_user_id": referred_id,
+                  }
+
+              except Exception as error:
+                  if connection is not None:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                  print(
+                      "REFERRAL CAPTURE ERROR:",
+                      repr(error),
+                      flush=True,
+                  )
+
+                  return {
+                      "success": False,
+                      "reason": "database_error",
+                  }
+
+              finally:
+                  if cursor is not None:
+                      _close_quietly(
+                          cursor
+                      )
+
+                  if connection is not None:
+                      _close_quietly(
+                          connection
+                      )
+
+
+          # ==================================================
+          # FINALIZE AFTER REGISTRATION
+          # ==================================================
+
+          def finalize_pending_referral(
+              get_db_connection,
+              referred_user_id,
+              calculate_level,
+          ):
+              referred_id = normalize_user_id(
+                  referred_user_id
+              )
+
+              if referred_id is None:
+                  return {
+                      "success": False,
+                      "reason": "invalid_referred_user",
+                  }
+
+              if not callable(
+                  calculate_level
+              ):
+                  return {
+                      "success": False,
+                      "reason": "invalid_level_calculator",
+                  }
+
+              connection = None
+              cursor = None
+
+              try:
+                  connection = get_db_connection()
+                  cursor = connection.cursor()
+
+                  # Lock the referral row first.
+                  cursor.execute(
+                      """
+                      SELECT
+                          id,
+                          referrer_user_id,
+                          referred_user_id,
+                          referrer_reward,
+                          referred_reward,
+                          status
+                      FROM referrals
+                      WHERE referred_user_id = %s
+                      FOR UPDATE
+                      """,
+                      (
+                          referred_id,
+                      ),
+                  )
+
+                  referral = cursor.fetchone()
+
+                  if referral is None:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "no_pending_referral",
+                      }
+
+                  (
+                      referral_id,
+                      referrer_id,
+                      stored_referred_id,
+                      referrer_reward,
+                      referred_reward,
+                      status,
+                  ) = referral
+
+                  if status != REFERRAL_STATUS_PENDING:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "already_processed",
+                      }
+
+                  if (
+                      referrer_id
+                      == stored_referred_id
+                  ):
+                      cursor.execute(
+                          """
+                          UPDATE referrals
+                          SET status = 'rejected'
+                          WHERE id = %s
+                          """,
+                          (
+                              referral_id,
+                          ),
+                      )
+
+                      _commit(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "self_referral",
+                      }
+
+                  # Lock both user rows in deterministic
+                  # order to reduce deadlock risk.
+                  locked_ids = sorted(
+                      [
+                          int(referrer_id),
+                          int(stored_referred_id),
+                      ]
+                  )
+
+                  cursor.execute(
+                      """
+                      SELECT
+                          telegram_id,
+                          points,
+                          level,
+                          sign
+                      FROM users
+                      WHERE telegram_id IN (
+                          %s,
+                          %s
+                      )
+                      ORDER BY telegram_id
+                      FOR UPDATE
+                      """,
+                      (
+                          locked_ids[0],
+                          locked_ids[1],
+                      ),
+                  )
+
+                  users = cursor.fetchall()
+
+                  user_map = {
+                      int(row[0]): row
+                      for row in users
+                  }
+
+                  referrer = user_map.get(
+                      int(referrer_id)
+                  )
+
+                  referred = user_map.get(
+                      int(stored_referred_id)
+                  )
+
+                  if referrer is None:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "referrer_not_found",
+                      }
+
+                  if referred is None:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "referred_not_registered",
+                      }
+
+                  referred_sign = referred[3]
+
+                  if (
+                      referred_sign is None
+                      or not str(
+                          referred_sign
+                      ).strip()
+                  ):
+                      _rollback_quietly(
+                          connection
+                      )
+
+                      return {
+                          "success": False,
+                          "reason": "registration_incomplete",
+                      }
+
+                  referrer_points = (
+                      int(
+                          referrer[1]
+                          or 0
+                      )
+                      + int(
+                          referrer_reward
+                      )
+                  )
+
+                  referred_points = (
+                      int(
+                          referred[1]
+                          or 0
+                      )
+                      + int(
+                          referred_reward
+                      )
+                  )
+
+                  referrer_level = calculate_level(
+                      referrer_points
+                  )
+
+                  referred_level = calculate_level(
+                      referred_points
+                  )
+
+                  cursor.execute(
+                      """
+                      UPDATE users
+                      SET
+                          points = %s,
+                          level = %s
+                      WHERE telegram_id = %s
+                      """,
+                      (
+                          referrer_points,
+                          referrer_level,
+                          referrer_id,
+                      ),
+                  )
+
+                  cursor.execute(
+                      """
+                      UPDATE users
+                      SET
+                          points = %s,
+                          level = %s
+                      WHERE telegram_id = %s
+                      """,
+                      (
+                          referred_points,
+                          referred_level,
+                          stored_referred_id,
+                      ),
+                  )
+
+                  cursor.execute(
+                      """
+                      UPDATE referrals
+                      SET
+                          status = 'rewarded',
+                          rewarded_at = NOW()
+                      WHERE
+                          id = %s
+                          AND status = 'pending'
+                      """,
+                      (
+                          referral_id,
+                      ),
+                  )
+
+                  if cursor.rowcount != 1:
+                      raise RuntimeError(
+                          "Referral status update failed"
+                      )
+
+                  _commit(
+                      connection
+                  )
+
+                  return {
+                      "success": True,
+                      "reason": "rewarded",
+                      "referral_id": referral_id,
+                      "referrer_user_id": int(
+                          referrer_id
+                      ),
+                      "referred_user_id": int(
+                          stored_referred_id
+                      ),
+                      "referrer_reward": int(
+                          referrer_reward
+                      ),
+                      "referred_reward": int(
+                          referred_reward
+                      ),
+                      "referrer_points": (
+                          referrer_points
+                      ),
+                      "referred_points": (
+                          referred_points
+                      ),
+                  }
+
+              except Exception as error:
+                  if connection is not None:
+                      _rollback_quietly(
+                          connection
+                      )
+
+                  print(
+                      "REFERRAL FINALIZE ERROR:",
+                      repr(error),
+                      flush=True,
+                  )
+
+                  return {
+                      "success": False,
+                      "reason": "database_error",
+                  }
+
+              finally:
+                  if cursor is not None:
+                      _close_quietly(
+                          cursor
+                      )
+
+                  if connection is not None:
+                      _close_quietly(
+                          connection
+                      )
+
+
+          # ==================================================
+          # REFERRAL STATS
+          # ==================================================
+
+          def get_referral_stats(
+              get_db_connection,
+              referrer_user_id,
+          ):
+              referrer_id = normalize_user_id(
+                  referrer_user_id
+              )
+
+              if referrer_id is None:
+                  return {
+                      "successful_referrals": 0,
+                      "points_earned": 0,
+                  }
+
+              connection = None
+              cursor = None
+
+              try:
+                  connection = get_db_connection()
+                  cursor = connection.cursor()
+
+                  cursor.execute(
+                      """
+                      SELECT
+                          COUNT(*),
+                          COALESCE(
+                              SUM(referrer_reward),
+                              0
+                          )
+                      FROM referrals
+                      WHERE
+                          referrer_user_id = %s
+                          AND status = 'rewarded'
+                      """,
+                      (
+                          referrer_id,
+                      ),
+                  )
+
+                  row = cursor.fetchone()
+
+                  return {
+                      "successful_referrals": int(
+                          row[0]
+                          or 0
+                      ),
+                      "points_earned": int(
+                          row[1]
+                          or 0
+                      ),
+                  }
+
+              except Exception as error:
+                  print(
+                      "REFERRAL STATS ERROR:",
+                      repr(error),
+                      flush=True,
+                  )
+
+                  return {
+                      "successful_referrals": 0,
+                      "points_earned": 0,
+                  }
+
+              finally:
+                  if cursor is not None:
+                      _close_quietly(
+                          cursor
+                      )
+
+                  if connection is not None:
+                      _close_quietly(
+                          connection
+                      )
+          PY
+
+          echo "REFERRAL ENGINE CREATED"
+
+      - name: Create bot integration patch
+        run: |
+          cat > /tmp/integrate_referral_v1.py <<'PY'
+          from pathlib import Path
+          import re
+
+
+          path = Path("bot.py")
+
+          source = path.read_text(
+              encoding="utf-8"
+          )
+
+          start_capture_marker = (
+              "# ASTROVIBE REFERRAL START CAPTURE"
+          )
+
+          finalization_marker = (
+              "# ASTROVIBE REFERRAL FINALIZATION"
+          )
+
+          invite_marker = (
+              "# ASTROVIBE REFERRAL INVITE ROUTING"
+          )
+
+          for marker in (
+              start_capture_marker,
+              finalization_marker,
+              invite_marker,
+          ):
+              if marker in source:
+                  raise RuntimeError(
+                      "Referral integration marker "
+                      "already present: "
+                      + marker
+                  )
+
+
+          # ==========================================
+          # LOCATE /start HANDLER
+          # ==========================================
+
+          decorator_pattern = re.compile(
+              r"@bot\.message_handler\("
+              r"[^\n]*commands\s*=\s*"
+              r"$$[^$$]*[\"']start[\"']"
+              r"[^\]]*\][^\n]*\)"
+          )
+
+          decorator_match = decorator_pattern.search(
+              source
+          )
+
+          if decorator_match is None:
+              raise RuntimeError(
+                  "/start handler decorator "
+                  "not found."
+              )
+
+          function_match = re.search(
+              r"\ndef\s+([A-Za-z_][A-Za-z0-9_]*)"
+              r"\s*$$\s*message\s*$$\s*:\s*\n",
+              source[
+                  decorator_match.end():
+              ],
+          )
+
+          if function_match is None:
+              raise RuntimeError(
+                  "/start handler function "
+                  "not found."
+              )
+
+          function_end = (
+              decorator_match.end()
+              + function_match.end()
+          )
+
+          start_capture_lines = [
+              "    # ASTROVIBE REFERRAL START CAPTURE",
+              "    try:",
+              "        from referral_engine import (",
+              "            capture_referral_start,",
+              "        )",
+              "",
+              "        capture_referral_start(",
+              "            get_db_connection,",
+              "            message.from_user.id,",
+              "            message.text or \"\",",
+              "        )",
+              "    except Exception as referral_error:",
+              "        print(",
+              "            \"REFERRAL START CAPTURE ERROR:\",",
+              "            repr(referral_error),",
+              "            flush=True,",
+              "        )",
+              "",
+          ]
+
+          start_capture_block = (
+              "\n".join(
+                  start_capture_lines
+              )
+              + "\n"
+          )
+
+          source = (
+              source[:function_end]
+              + start_capture_block
+              + source[function_end:]
+          )
+
+
+          # ==========================================
+          # LOCATE MAIN MENU ROUTING
+          # ==========================================
+
+          menu_position = source.find(
+              "def menu(message):"
+          )
+
+          if menu_position == -1:
+              raise RuntimeError(
+                  "menu(message) not found."
+              )
+
+          routing_position = source.find(
+              '    if command_name == "/paysupport":',
+              menu_position,
+          )
+
+          if routing_position == -1:
+              routing_position = source.find(
+                  '    if command_name == "/terms":',
+                  menu_position,
+              )
+
+          if routing_position == -1:
+              raise RuntimeError(
+                  "Safe menu routing insertion "
+                  "point not found."
+              )
+
+
+          # ==========================================
+          # FINALIZE PENDING REFERRAL
+          # ==========================================
+
+          finalization_lines = [
+              "    # ASTROVIBE REFERRAL FINALIZATION",
+              "    try:",
+              "        from referral_engine import (",
+              "            build_referral_reward_message,",
+              "            finalize_pending_referral,",
+              "        )",
+              "",
+              "        referral_result = (",
+              "            finalize_pending_referral(",
+              "                get_db_connection,",
+              "                user_id,",
+              "                calculate_level,",
+              "            )",
+              "        )",
+              "",
+              "        if referral_result.get(",
+              "            \"success\"",
+              "        ):",
+              "            bot.send_message(",
+              "                referral_result[",
+              "                    \"referrer_user_id\"",
+              "                ],",
+              "                build_referral_reward_message(",
+              "                    \"referrer\",",
+              "                    referral_result[",
+              "                        \"referrer_reward\"",
+              "                    ],",
+              "                    get_user_language(",
+              "                        referral_result[",
+              "                            \"referrer_user_id\"",
+              "                        ]",
+              "                    ),",
+              "                ),",
+              "            )",
+              "",
+              "            bot.send_message(",
+              "                referral_result[",
+              "                    \"referred_user_id\"",
+              "                ],",
+              "                build_referral_reward_message(",
+              "                    \"referred\",",
+              "                    referral_result[",
+              "                        \"referred_reward\"",
+              "                    ],",
+              "                    language,",
+              "                ),",
+              "            )",
+              "    except Exception as referral_error:",
+              "        print(",
+              "            \"REFERRAL FINALIZATION ERROR:\",",
+              "            repr(referral_error),",
+              "            flush=True,",
+              "        )",
+              "",
+          ]
+
+          finalization_block = (
+              "\n".join(
+                  finalization_lines
+              )
+              + "\n"
+          )
+
+
+          # ==========================================
+          # /invite ROUTING
+          # ==========================================
+
+          invite_lines = [
+              "    # ASTROVIBE REFERRAL INVITE ROUTING",
+              "    if command_name == \"/invite\":",
+              "        from referral_engine import (",
+              "            build_invite_message,",
+              "            get_referral_stats,",
+              "        )",
+              "",
+              "        referral_stats = get_referral_stats(",
+              "            get_db_connection,",
+              "            user_id,",
+              "        )",
+              "",
+              "        invite_text = build_invite_message(",
+              "            user_id,",
+              "            language,",
+              "        )",
+              "",
+              "        if language == \"en\":",
+              "            invite_text += (",
+              "                \"\\n\\n📊 Successful referrals: \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"successful_referrals\"",
+              "                    ]",
+              "                )",
+              "                + \"\\n⭐ Referral points earned: \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"points_earned\"",
+              "                    ]",
+              "                )",
+              "            )",
+              "        else:",
+              "            invite_text += (",
+              "                \"\\n\\n📊 Parrainages réussis : \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"successful_referrals\"",
+              "                    ]",
+              "                )",
+              "                + \"\\n⭐ Points gagnés par parrainage : \"",
+              "                + str(",
+              "                    referral_stats[",
+              "                        \"points_earned\"",
+              "                    ]",
+              "                )",
+              "            )",
+              "",
+              "        bot.send_message(",
+              "            message.chat.id,",
+              "            invite_text,",
+              "            reply_markup=main_menu(",
+              "                language",
+              "            ),",
+              "        )",
+              "",
+              "        return",
+              "",
+          ]
+
+          invite_block = (
+              "\n".join(
+                  invite_lines
+              )
+              + "\n"
+          )
+
+          referral_routing_block = (
+              finalization_block
+              + invite_block
+          )
+
+          source = (
+              source[:routing_position]
+              + referral_routing_block
+              + source[routing_position:]
+          )
+
+          path.write_text(
+              source,
+              encoding="utf-8",
+          )
+
+          print(
+              "REFERRAL V1 CONNECTED TO BOT"
+          )
+          PY
+
+      - name: Validate integration patch
+        run: |
+          python -m py_compile /tmp/integrate_referral_v1.py
+
+          echo "INTEGRATION PATCH VALID"
+
+      - name: Apply bot integration patch
+        run: |
+          python /tmp/integrate_referral_v1.py
+
+      - name: Compile referral stack
+        run: |
+          python -m py_compile referral_engine.py
+          python -m py_compile bot.py
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_admin.py
+          python -m py_compile paysupport_ai.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile profile_purchase_engine.py
+          python -m py_compile terms_engine.py
+
+          echo "COMPLETE STACK COMPILES"
+
+      - name: Test referral payload parsing
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              parse_referral_payload,
+          )
+
+          assert (
+              parse_referral_payload(
+                  "/start ref_123456789"
+              )
+              == 123456789
+          )
+
+          assert (
+              parse_referral_payload(
+                  "/start@AstrovibeAIbot "
+                  "ref_987654321"
+              )
+              == 987654321
+          )
+
+          invalid = (
+              None,
+              "",
+              "/start",
+              "/start ref_",
+              "/start ref_0",
+              "/start ref_-1",
+              "/start ref_invalid",
+              "/wrong ref_123",
+              "/start other_123",
+          )
+
+          for value in invalid:
+              assert (
+                  parse_referral_payload(
+                      value
+                  )
+                  is None
+              ), value
+
+          print(
+              "REFERRAL PAYLOAD PARSING OK"
+          )
+          PY
+
+      - name: Test referral links and messages
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              build_invite_message,
+              build_referral_link,
+              build_referral_reward_message,
+          )
+
+          link = build_referral_link(
+              123456789
+          )
+
+          assert (
+              link
+              == (
+                  "https://t.me/"
+                  "AstrovibeAIbot"
+                  "?start=ref_123456789"
+              )
+          )
+
+          french = build_invite_message(
+              123456789,
+              "fr",
+          )
+
+          english = build_invite_message(
+              123456789,
+              "en",
+          )
+
+          assert "50 points" in french
+          assert "20 points" in french
+          assert "lien personnel" in french
+
+          assert "50 points" in english
+          assert "20 welcome points" in english
+          assert "personal link" in english
+
+          assert (
+              "Parrainage AstroVibe validé"
+              in build_referral_reward_message(
+                  "referrer",
+                  50,
+                  "fr",
+              )
+          )
+
+          assert (
+              "referral validated"
+              in build_referral_reward_message(
+                  "referrer",
+                  50,
+                  "en",
+              ).lower()
+          )
+
+          print(
+              "REFERRAL LINKS AND MESSAGES OK"
+          )
+          PY
+
+      - name: Test simulated referral capture
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              capture_referral_start,
+          )
+
+
+          class FakeCursor:
+              def __init__(self):
+                  self.calls = []
+                  self.fetches = [
+                      None,
+                      (1,),
+                      (77,),
+                  ]
+                  self.rowcount = 1
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  self.calls.append(
+                      (
+                          query,
+                          params,
+                      )
+                  )
+
+              def fetchone(self):
+                  return self.fetches.pop(0)
+
+              def close(self):
+                  pass
+
+
+          class FakeConnection:
+              def __init__(self):
+                  self.cursor_instance = (
+                      FakeCursor()
+                  )
+                  self.committed = False
+                  self.rolled_back = False
+
+              def cursor(self):
+                  return self.cursor_instance
+
+              def commit(self):
+                  self.committed = True
+
+              def rollback(self):
+                  self.rolled_back = True
+
+              def close(self):
+                  pass
+
+
+          connection = FakeConnection()
+
+          result = capture_referral_start(
+              lambda: connection,
+              referred_user_id=222,
+              command_text=(
+                  "/start ref_111"
+              ),
+          )
+
+          assert result["success"] is True
+          assert result["reason"] == "pending_created"
+          assert result["referrer_user_id"] == 111
+          assert result["referred_user_id"] == 222
+          assert connection.committed is True
+
+          assert len(
+              connection.cursor_instance.calls
+          ) == 3
+
+          inserted_query = (
+              connection
+              .cursor_instance
+              .calls[2][0]
+          )
+
+          assert (
+              "ON CONFLICT"
+              in inserted_query
+          )
+
+          assert (
+              "DO NOTHING"
+              in inserted_query
+          )
+
+          print(
+              "SIMULATED REFERRAL CAPTURE OK"
+          )
+          PY
+
+      - name: Test self referral rejection
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              capture_referral_start,
+          )
+
+
+          def forbidden_connection():
+              raise AssertionError(
+                  "Database must not be called "
+                  "for self-referral"
+              )
+
+
+          result = capture_referral_start(
+              forbidden_connection,
+              referred_user_id=123,
+              command_text=(
+                  "/start ref_123"
+              ),
+          )
+
+          assert result["success"] is False
+          assert result["reason"] == "self_referral"
+
+          print(
+              "SELF REFERRAL REJECTED"
+          )
+          PY
+
+      - name: Test existing user rejection
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              capture_referral_start,
+          )
+
+
+          class FakeCursor:
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  pass
+
+              def fetchone(self):
+                  return (1,)
+
+              def close(self):
+                  pass
+
+
+          class FakeConnection:
+              def __init__(self):
+                  self.rolled_back = False
+
+              def cursor(self):
+                  return FakeCursor()
+
+              def rollback(self):
+                  self.rolled_back = True
+
+              def close(self):
+                  pass
+
+
+          connection = FakeConnection()
+
+          result = capture_referral_start(
+              lambda: connection,
+              referred_user_id=222,
+              command_text=(
+                  "/start ref_111"
+              ),
+          )
+
+          assert result["success"] is False
+          assert result["reason"] == "existing_user"
+          assert connection.rolled_back is True
+
+          print(
+              "EXISTING USER REJECTED"
+          )
+          PY
+
+      - name: Test simulated transactional reward
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              finalize_pending_referral,
+          )
+
+
+          class FakeCursor:
+              def __init__(self):
+                  self.fetches = [
+                      (
+                          77,
+                          111,
+                          222,
+                          50,
+                          20,
+                          "pending",
+                      ),
+                      [
+                          (
+                              111,
+                              100,
+                              1,
+                              "Aries",
+                          ),
+                          (
+                              222,
+                              10,
+                              1,
+                              "Leo",
+                          ),
+                      ],
+                  ]
+                  self.calls = []
+                  self.rowcount = 1
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  self.calls.append(
+                      (
+                          query,
+                          params,
+                      )
+                  )
+
+                  if (
+                      "UPDATE referrals"
+                      in query
+                  ):
+                      self.rowcount = 1
+
+              def fetchone(self):
+                  return self.fetches.pop(0)
+
+              def fetchall(self):
+                  return self.fetches.pop(0)
+
+              def close(self):
+                  pass
+
+
+          class FakeConnection:
+              def __init__(self):
+                  self.cursor_instance = (
+                      FakeCursor()
+                  )
+                  self.committed = False
+                  self.rolled_back = False
+
+              def cursor(self):
+                  return self.cursor_instance
+
+              def commit(self):
+                  self.committed = True
+
+              def rollback(self):
+                  self.rolled_back = True
+
+              def close(self):
+                  pass
+
+
+          connection = FakeConnection()
+
+          def fake_level(points):
+              if points >= 100:
+                  return 2
+
+              return 1
+
+
+          result = finalize_pending_referral(
+              lambda: connection,
+              referred_user_id=222,
+              calculate_level=fake_level,
+          )
+
+          assert result["success"] is True
+          assert result["reason"] == "rewarded"
+
+          assert (
+              result["referrer_points"]
+              == 150
+          )
+
+          assert (
+              result["referred_points"]
+              == 30
+          )
+
+          assert connection.committed is True
+          assert connection.rolled_back is False
+
+          queries = [
+              call[0]
+              for call
+              in connection
+              .cursor_instance
+              .calls
+          ]
+
+          assert any(
+              "FROM referrals" in query
+              and "FOR UPDATE" in query
+              for query in queries
+          )
+
+          assert any(
+              "FROM users" in query
+              and "FOR UPDATE" in query
+              for query in queries
+          )
+
+          assert any(
+              "status = 'rewarded'"
+              in query
+              for query in queries
+          )
+
+          print(
+              "TRANSACTIONAL REFERRAL "
+              "REWARD OK"
+          )
+          PY
+
+      - name: Test incomplete registration protection
+        run: |
+          python - <<'PY'
+          from referral_engine import (
+              finalize_pending_referral,
+          )
+
+
+          class FakeCursor:
+              def __init__(self):
+                  self.fetches = [
+                      (
+                          77,
+                          111,
+                          222,
+                          50,
+                          20,
+                          "pending",
+                      ),
+                      [
+                          (
+                              111,
+                              100,
+                              1,
+                              "Aries",
+                          ),
+                          (
+                              222,
+                              0,
+                              1,
+                              None,
+                          ),
+                      ],
+                  ]
+                  self.rowcount = 1
+
+              def execute(
+                  self,
+                  query,
+                  params=None,
+              ):
+                  pass
+
+              def fetchone(self):
+                  return self.fetches.pop(0)
+
+              def fetchall(self):
+                  return self.fetches.pop(0)
+
+              def close(self):
+                  pass
+
+
+          class FakeConnection:
+              def __init__(self):
+                  self.rolled_back = False
+
+              def cursor(self):
+                  return FakeCursor()
+
+              def commit(self):
+                  raise AssertionError(
+                      "Incomplete registration "
+                      "must not commit"
+                  )
+
+              def rollback(self):
+                  self.rolled_back = True
+
+              def close(self):
+                  pass
+
+
+          connection = FakeConnection()
+
+          result = finalize_pending_referral(
+              lambda: connection,
+              referred_user_id=222,
+              calculate_level=lambda points: 1,
+          )
+
+          assert result["success"] is False
+
+          assert (
+              result["reason"]
+              == "registration_incomplete"
+          )
+
+          assert connection.rolled_back is True
+
+          print(
+              "INCOMPLETE REGISTRATION "
+              "NOT REWARDED"
+          )
+          PY
+
+      - name: Verify bot referral integration
+        run: |
+          grep -q "ASTROVIBE REFERRAL START CAPTURE" bot.py
+          grep -q "capture_referral_start" bot.py
+          grep -q "ASTROVIBE REFERRAL FINALIZATION" bot.py
+          grep -q "finalize_pending_referral" bot.py
+          grep -q "ASTROVIBE REFERRAL INVITE ROUTING" bot.py
+          grep -q 'command_name == "/invite"' bot.py
+          grep -q "build_invite_message" bot.py
+          grep -q "get_referral_stats" bot.py
+
+          echo "BOT REFERRAL INTEGRATION OK"
+
+      - name: Verify referral security contracts
+        run: |
+          grep -q "ON CONFLICT" referral_engine.py
+          grep -q "DO NOTHING" referral_engine.py
+          grep -q "FOR UPDATE" referral_engine.py
+          grep -q "status = 'rewarded'" referral_engine.py
+          grep -q "registration_incomplete" referral_engine.py
+          grep -q "self_referral" referral_engine.py
+          grep -q "existing_user" referral_engine.py
+
+          echo "REFERRAL SECURITY CONTRACTS OK"
+
+      - name: Verify payment systems remain separate
+        run: |
+          if grep -Eq \
+            'refundStarsCharge|createInvoiceLink|send_invoice|successful_payment|premium_subscriptions|profile_purchases' \
+            referral_engine.py
+          then
+            echo "Referral engine touches payment systems."
+            exit 1
+          fi
+
+          echo "REFERRAL ENGINE DOES NOT TOUCH PAYMENTS"
+
+      - name: Verify Profile preserved
+        run: |
+          grep -q "astrovibe_profile_v2:" bot.py
+          grep -q "process_profile_pre_checkout" bot.py
+          grep -q "process_successful_profile_purchase" bot.py
+          grep -q "send_personal_profile" bot.py
+
+          echo "PROFILE 390 STARS PRESERVED"
+
+      - name: Verify Premium preserved
+        run: |
+          grep -q "astrovibe_premium:" bot.py
+          grep -q "createInvoiceLink" bot.py
+          grep -q "process_premium_pre_checkout" bot.py
+          grep -q "process_successful_premium_payment" bot.py
+
+          echo "PREMIUM 199 STARS PRESERVED"
+
+      - name: Verify support and terms preserved
+        run: |
+          grep -q 'command_name == "/terms"' bot.py
+          grep -q 'command_name == "/paysupport"' bot.py
+          grep -q 'command_name == "/supportreply"' bot.py
+          grep -q "ASTROVIBE SUPPORT AI ROUTING" bot.py
+          grep -q "send_ticket_to_admin" bot.py
+
+          echo "TERMS PRESERVED"
+          echo "AI SUPPORT PRESERVED"
+          echo "HUMAN SUPPORT PRESERVED"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Verify expected files changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "status",
+                  "--porcelain",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = set()
+
+          for line in result.stdout.splitlines():
+              if not line.strip():
+                  continue
+
+              path = line[3:].strip()
+
+              changed.add(path)
+
+          expected = {
+              "bot.py",
+              "referral_engine.py",
+          }
+
+          assert changed == expected, (
+              "Unexpected changed files: "
+              + repr(sorted(changed))
+          )
+
+          print(
+              "ONLY EXPECTED FILES CHANGED:",
+              sorted(changed),
+          )
+          PY
+
+      - name: Show referral changes
+        run: |
+          git diff -- bot.py
+          git diff --no-index /dev/null referral_engine.py || true
+
+      - name: Commit Referral V1
+        run: |
+          git add bot.py referral_engine.py
+
+          if git diff --cached --quiet; then
+            echo "No referral changes."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Integrate AstroVibe Referral V1"
+          git push
