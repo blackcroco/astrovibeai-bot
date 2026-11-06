@@ -1,0 +1,299 @@
+name: Audit Referral Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-referral:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify repository
+        run: |
+          test -f bot.py
+
+          echo "REPOSITORY READY"
+          echo "REFERRAL AUDIT IS READ ONLY"
+
+      - name: Find start command
+        run: |
+          echo "======================================"
+          echo "START COMMAND REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'commands=.*start|commands=$$"start"$$|def .*start|/start' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find start payload parsing
+        run: |
+          echo "======================================"
+          echo "START PAYLOAD REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'split.*start|message\.text\.split|start_payload|start_parameter|start_param|get_args|payload' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find referral terminology
+        run: |
+          echo "======================================"
+          echo "REFERRAL TERMINOLOGY"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'referral|referrer|referred|referred_by|ref_code|referral_code|invite_code|invited_by|sponsor|sponsored|parrain|parrainage|filleul' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find Telegram deep links
+        run: |
+          echo "======================================"
+          echo "TELEGRAM DEEP LINKS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 't\.me/|telegram\.me/|start=|startapp=|start_' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find invite language
+        run: |
+          echo "======================================"
+          echo "INVITE LANGUAGE"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'invite|invitation|inviter|invited|friend|friends|ami|amis|partage|partager|share|sharing' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find referral database references
+        run: |
+          echo "======================================"
+          echo "REFERRAL DATABASE REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'referred_by|referrer|referral|invite_code|invited_by|sponsor|parrain|filleul' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find point rewards near signup
+        run: |
+          echo "======================================"
+          echo "SIGNUP REWARD REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'INSERT INTO users|UPDATE users|points = points \+|points \+|new_points|reward|récompense|bonus' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find user creation functions
+        run: |
+          echo "======================================"
+          echo "USER CREATION REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E 'create.*user|create_or_update_user|new_user|register.*user|INSERT INTO users' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Inspect start handler context
+        run: |
+          echo "======================================"
+          echo "START HANDLER CONTEXT"
+          echo "======================================"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("bot.py")
+
+          lines = path.read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          patterns = (
+              r'commands=.*start',
+              r'commands=$$"start"$$',
+              r'def .*start',
+          )
+
+          indexes = []
+
+          for index, line in enumerate(
+              lines
+          ):
+              if any(
+                  re.search(
+                      pattern,
+                      line,
+                      re.IGNORECASE,
+                  )
+                  for pattern in patterns
+              ):
+                  indexes.append(
+                      index
+                  )
+
+          if not indexes:
+              print(
+                  "NO START HANDLER FOUND"
+              )
+
+          for index in indexes:
+              start = max(
+                  index - 10,
+                  0,
+              )
+
+              end = min(
+                  index + 80,
+                  len(lines),
+              )
+
+              print(
+                  "--------------------------------------"
+              )
+
+              print(
+                  "CONTEXT AROUND LINE",
+                  index + 1,
+              )
+
+              print(
+                  "--------------------------------------"
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      (
+                          f"{line_number + 1}: "
+                          f"{lines[line_number]}"
+                      )
+                  )
+          PY
+
+      - name: Inspect user creation context
+        run: |
+          echo "======================================"
+          echo "USER CREATION CONTEXT"
+          echo "======================================"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot.py")
+
+          lines = path.read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          markers = (
+              "create_or_update_user",
+              "INSERT INTO users",
+          )
+
+          indexes = []
+
+          for index, line in enumerate(
+              lines
+          ):
+              if any(
+                  marker in line
+                  for marker in markers
+              ):
+                  indexes.append(
+                      index
+                  )
+
+          seen = set()
+
+          for index in indexes:
+              if index in seen:
+                  continue
+
+              start = max(
+                  index - 12,
+                  0,
+              )
+
+              end = min(
+                  index + 45,
+                  len(lines),
+              )
+
+              for item in range(
+                  start,
+                  end,
+              ):
+                  seen.add(item)
+
+              print(
+                  "--------------------------------------"
+              )
+
+              print(
+                  "CONTEXT AROUND LINE",
+                  index + 1,
+              )
+
+              print(
+                  "--------------------------------------"
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      (
+                          f"{line_number + 1}: "
+                          f"{lines[line_number]}"
+                      )
+                  )
+          PY
+
+      - name: Look for anti self referral logic
+        run: |
+          echo "================================Telegram messages: 0"
+          echo "Payments touched: 0"
