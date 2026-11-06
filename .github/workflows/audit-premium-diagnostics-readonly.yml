@@ -1,0 +1,346 @@
+name: Audit Premium Diagnostics Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-premium-diagnostics:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify repository
+        run: |
+          test -f bot.py
+
+          echo "REPOSITORY READY"
+          echo "PREMIUM DIAGNOSTIC AUDIT IS READ ONLY"
+
+      - name: Find Premium diagnostic markers
+        run: |
+          echo "======================================"
+          echo "PREMIUM DIAGNOSTIC MARKERS"
+          echo "======================================"
+
+          grep -nEi \
+            'PREMIUM.*DIAGNOSTIC|DIAGNOSTIC.*PREMIUM|Diagnostic.*status|DIAGNOSTIC MESSAGE ERROR' \
+            bot.py \
+            || true
+
+      - name: Show Premium invoice diagnostic context
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lines = Path("bot.py").read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          markers = (
+              "PREMIUM INVOICE DIAGNOSTIC",
+              "PREMIUM DIAGNOSTIC MESSAGE ERROR",
+          )
+
+          indexes = []
+
+          for index, line in enumerate(lines):
+              if any(
+                  marker in line
+                  for marker in markers
+              ):
+                  indexes.append(index)
+
+          print("=" * 40)
+          print("PREMIUM INVOICE DIAGNOSTIC CONTEXT")
+          print("=" * 40)
+
+          if not indexes:
+              print(
+                  "NO PREMIUM DIAGNOSTIC MARKERS FOUND"
+              )
+
+          shown = set()
+
+          for index in indexes:
+              start = max(
+                  index - 35,
+                  0,
+              )
+
+              end = min(
+                  index + 45,
+                  len(lines),
+              )
+
+              key = (
+                  start,
+                  end,
+              )
+
+              if key in shown:
+                  continue
+
+              shown.add(key)
+
+              print()
+              print(
+                  "CONTEXT AROUND LINE",
+                  index + 1,
+              )
+
+              print(
+                  "-" * 40
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      f"{line_number + 1}: "
+                      f"{lines[line_number]}"
+                  )
+          PY
+
+      - name: Find generic status diagnostic
+        run: |
+          echo "======================================"
+          echo "GENERIC STATUS DIAGNOSTIC"
+          echo "======================================"
+
+          grep -nEi \
+            'Diagnostic.*status|status.*Diagnostic|diagnostic.*status' \
+            bot.py \
+            || true
+
+      - name: Show generic diagnostic context
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lines = Path("bot.py").read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          indexes = []
+
+          for index, line in enumerate(lines):
+              lowered = line.lower()
+
+              if (
+                  "diagnostic" in lowered
+                  and "status" in lowered
+              ):
+                  indexes.append(index)
+
+          print("=" * 40)
+          print("GENERIC DIAGNOSTIC CONTEXT")
+          print("=" * 40)
+
+          if not indexes:
+              print(
+                  "NO GENERIC STATUS "
+                  "DIAGNOSTIC FOUND"
+              )
+
+          shown = set()
+
+          for index in indexes:
+              start = max(
+                  index - 30,
+                  0,
+              )
+
+              end = min(
+                  index + 35,
+                  len(lines),
+              )
+
+              key = (
+                  start,
+                  end,
+              )
+
+              if key in shown:
+                  continue
+
+              shown.add(key)
+
+              print()
+              print(
+                  "CONTEXT AROUND LINE",
+                  index + 1,
+              )
+
+              print(
+                  "-" * 40
+              )
+
+              for line_number in range(
+                  start,
+                  end,
+              ):
+                  print(
+                      f"{line_number + 1}: "
+                      f"{lines[line_number]}"
+                  )
+          PY
+
+      - name: Find diagnostic Telegram messages
+        run: |
+          echo "======================================"
+          echo "DIAGNOSTIC TELEGRAM MESSAGES"
+          echo "======================================"
+
+          grep -nEi \
+            'send_message.*diagnostic|reply_to.*diagnostic|send_message.*status|Diagnostic :' \
+            bot.py \
+            || true
+
+      - name: Find Premium user visible errors
+        run: |
+          echo "======================================"
+          echo "PREMIUM USER VISIBLE ERROR REFERENCES"
+          echo "======================================"
+
+          grep -nEi \
+            'premium.*error|premium.*erreur|error.*premium|erreur.*premium|invoice.*error|invoice.*erreur' \
+            bot.py \
+            || true
+
+      - name: Find Premium server logs
+        run: |
+          echo "======================================"
+          echo "PREMIUM SERVER LOG REFERENCES"
+          echo "======================================"
+
+          grep -nEi \
+            'print\(.*premium|PREMIUM.*ERROR|PREMIUM.*FAILED|PREMIUM.*SUCCESS|INVOICE.*ERROR|INVOICE.*FAILED' \
+            bot.py \
+            || true
+
+      - name: Find Premium diagnostic handlers
+        run: |
+          echo "======================================"
+          echo "PREMIUM DIAGNOSTIC HANDLERS"
+          echo "======================================"
+
+          grep -nEi \
+            'commands=.*premium.*(test|debug|diag)|commands=.*(test|debug|diag).*premium|def .*premium.*(test|debug|diag)|def .*(test|debug|diag).*premium' \
+            bot.py \
+            || true
+
+      - name: Find diagnostic callback data
+        run: |
+          echo "======================================"
+          echo "DIAGNOSTIC CALLBACK REFERENCES"
+          echo "======================================"
+
+          grep -nEi \
+            'callback_data=.*diagnostic|callback_data=.*debug|diagnostic.*callback|debug.*callback' \
+            bot.py \
+            || true
+
+      - name: Inspect Premium payment references
+        run: |
+          echo "======================================"
+          echo "PREMIUM PAYMENT REFERENCES"
+          echo "======================================"
+
+          grep -nEi \
+            'createInvoiceLink|astrovibe_premium:|process_premium_pre_checkout|process_successful_premium_payment' \
+            bot.py \
+            || true
+
+      - name: Verify critical Premium components exist
+        run: |
+          test -f premium_engine.py
+          test -f premium_subscription_engine.py
+          test -f premium_stars_payment.py
+          test -f premium_stars_handlers.py
+
+          grep -q \
+            "astrovibe_premium:" \
+            bot.py
+
+          grep -q \
+            "createInvoiceLink" \
+            bot.py
+
+          grep -q \
+            "process_premium_pre_checkout" \
+            bot.py
+
+          grep -q \
+            "process_successful_premium_payment" \
+            bot.py
+
+          echo "PREMIUM COMPONENTS PRESENT"
+
+      - name: Compile Premium production stack
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile premium_engine.py
+          python -m py_compile premium_subscription_engine.py
+          python -m py_compile premium_stars_payment.py
+          python -m py_compile premium_stars_handlers.py
+
+          echo "PREMIUM STACK COMPILES"
+
+      - name: Verify unrelated systems present
+        run: |
+          test -f referral_engine.py
+          test -f level_rewards_engine.py
+          test -f paysupport_engine.py
+          test -f paysupport_admin.py
+          test -f paysupport_ai.py
+          test -f profile_purchase_engine.py
+          test -f terms_engine.py
+
+          echo "OTHER PRODUCTION SYSTEMS PRESENT"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Prove zero repository changes
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+          test -z "$(git status --porcelain)"
+
+          echo "NO REPOSITORY FILE CHANGED"
+
+      - name: Final read only confirmation
+        run: |
+          echo "======================================"
+          echo "PREMIUM DIAGNOSTIC AUDIT COMPLETE"
+          echo "======================================"
+          echo "Files modified: 0"
+          echo "Files deleted: 0"
+          echo "Database writes: 0"
+          echo "Telegram messages: 0"
+          echo "Premium rights changed: 0"
+          echo "Payments initiated: 0"
