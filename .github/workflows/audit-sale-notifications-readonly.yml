@@ -19,16 +19,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify payment files
+      - name: Verify repository
         run: |
           test -f bot.py
-          test -f profile_purchase_engine.py
-          test -f premium_subscription_engine.py
 
           echo "REPOSITORY READY"
           echo "SALE NOTIFICATION AUDIT IS READ ONLY"
 
-      - name: List payment related files
+      - name: Find payment related files
         run: |
           echo "======================================"
           echo "PAYMENT RELATED FILES"
@@ -70,232 +68,41 @@ jobs:
           grep -Rni \
             --include="*.py" \
             -E \
-            'SUPPORT_ADMIN_TELEGRAM_ID|ADMIN_TELEGRAM_ID|ADMIN_CHAT_ID|ADMIN_ID|admin_user_id|admin_chat_id' \
+            'SUPPORT_ADMIN_TELEGRAM_ID|ADMIN_TELEGRAM_ID|ADMIN_CHAT_ID|ADMIN_ID' \
             . \
             --exclude-dir=".git" \
             --exclude-dir="__pycache__" \
             || true
 
-      - name: Analyze sale notification paths
+      - name: Find Profile payment references
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
+          echo "======================================"
+          echo "PROFILE PAYMENT REFERENCES"
+          echo "======================================"
 
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'astrovibe_profile_v2|profile_purchase|process_successful_profile_purchase|390' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
 
-          FILE_PATTERNS = (
-              "*.py",
-          )
-
-          files = []
-
-          for pattern in FILE_PATTERNS:
-              for path in Path(".").rglob(pattern):
-                  if (
-                      ".git" in path.parts
-                      or "__pycache__" in path.parts
-                  ):
-                      continue
-
-                  files.append(path)
-
-
-          profile_terms = (
-              "profile",
-              "profile_purchase",
-              "astrovibe_profile",
-          )
-
-          premium_terms = (
-              "premium",
-              "premium_subscription",
-              "astrovibe_premium",
-          )
-
-          payment_terms = (
-              "successful_payment",
-              "process_successful",
-          )
-
-          admin_terms = (
-              "SUPPORT_ADMIN_TELEGRAM_ID",
-              "ADMIN_TELEGRAM_ID",
-              "ADMIN_CHAT_ID",
-              "ADMIN_ID",
-              "admin_chat_id",
-              "admin_user_id",
-          )
-
-          send_terms = (
-              "send_message(",
-              "send_message (",
-          )
-
-
-          def analyze_context(
-              category_terms,
-          ):
-              evidence = []
-
-              for path in files:
-                  text = path.read_text(
-                      encoding="utf-8",
-                      errors="replace",
-                  )
-
-                  lines = text.splitlines()
-
-                  for index, line in enumerate(lines):
-                      lower_line = line.lower()
-
-                      has_payment = any(
-                          term.lower()
-                          in lower_line
-                          for term in payment_terms
-                      )
-
-                      if not has_payment:
-                          continue
-
-                      start = max(
-                          0,
-                          index - 25,
-                      )
-
-                      end = min(
-                          len(lines),
-                          index + 90,
-                      )
-
-                      block = "\n".join(
-                          lines[start:end]
-                      )
-
-                      block_lower = (
-                          block.lower()
-                      )
-
-                      has_category = any(
-                          term.lower()
-                          in block_lower
-                          for term
-                          in category_terms
-                      )
-
-                      if not has_category:
-                          continue
-
-                      has_admin = any(
-                          term
-                          in block
-                          for term
-                          in admin_terms
-                      )
-
-                      has_send = any(
-                          term
-                          in block
-                          for term
-                          in send_terms
-                      )
-
-                      evidence.append(
-                          {
-                              "file": str(path),
-                              "line": 1}: "
-                          f"{safe_line}"
-                      )
-
-          if not found:
-              print(
-                  "NO PROFILE PAYMENT CONTEXT FOUND"
-              )
-          PY
-
-      - name: Show Premium payment context
+      - name: Find Premium payment references
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          echo "======================================"
+          echo "PREMIUM PAYMENT REFERENCES"
+          echo "======================================"
 
-
-          terms = (
-              "process_successful_premium_payment",
-              "astrovibe_premium",
-              "premium_subscription",
-          )
-
-          print("=" * 40)
-          print("PREMIUM PAYMENT CONTEXT")
-          print("=" * 40)
-
-          found = False
-
-          for path in Path(".").rglob("*.py"):
-              if (
-                  ".git" in path.parts
-                  or "__pycache__"
-                  in path.parts
-              ):
-                  continue
-
-              lines = path.read_text(
-                  encoding="utf-8",
-                  errors="replace",
-              ).splitlines()
-
-              for index, line in enumerate(lines):
-                  if not any(
-                      term.lower()
-                      in line.lower()
-                      for term in terms
-                  ):
-                      continue
-
-                  found = True
-
-                  start = max(
-                      0,
-                      index - 20,
-                  )
-
-                  end = min(
-                      len(lines),
-                      index + 55,
-                  )
-
-                  print()
-                  print(
-                      "FILE:",
-                      path,
-                      "| LINE:",
-                      index + 1,
-                  )
-
-                  for number in range(
-                      start,
-                      end,
-                  ):
-                      safe_line = lines[number]
-
-                      if (
-                          "TOKEN=" in safe_line
-                          or "API_KEY=" in safe_line
-                          or "DATABASE_URL=" in safe_line
-                      ):
-                          safe_line = (
-                              "[SENSITIVE LINE HIDDEN]"
-                          )
-
-                      print(
-                          f"{number + 1}: "
-                          f"{safe_line}"
-                      )
-
-          if not found:
-              print(
-                  "NO PREMIUM PAYMENT CONTEXT FOUND"
-              )
-          PY
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'astrovibe_premium|premium_subscription|process_successful_premium_payment|199' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
 
       - name: Find admin Telegram sends
         run: |
@@ -306,10 +113,28 @@ jobs:
           grep -Rni \
             --include="*.py" \
             -E \
-            'send_message.*ADMIN|send_message.*admin|ADMIN.*send_message|SUPPORT_ADMIN_TELEGRAM_ID' \
+            'send_message.*SUPPORT_ADMIN_TELEGRAM_ID|send_message.*ADMIN_TELEGRAM_ID|send_message.*ADMIN_CHAT_ID|send_message.*ADMIN_ID' \
             . \
             --exclude-dir=".git" \
             --exclude-dir="__pycache__" \
+            || true
+
+      - name: Find all admin references near Telegram sends
+        run: |
+          echo "======================================"
+          echo "ADMIN AND SEND_MESSAGE REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -E \
+            'SUPPORT_ADMIN_TELEGRAM_ID|ADMIN_TELEGRAM_ID|ADMIN_CHAT_ID|ADMIN_ID|send_message\(' \
+            bot.py \
+            profile_purchase_engine.py \
+            premium_subscription_engine.py \
+            premium_stars_payment.py \
+            profile_stars_payment.py \
+            2>/dev/null \
             || true
 
       - name: Find sale notification wording
@@ -321,7 +146,41 @@ jobs:
           grep -Rni \
             --include="*.py" \
             -Ei \
-            'nouvel achat|nouvelle vente|nouvel abonnement|new sale|new purchase|new subscription|achat.*valid|vente.*valid|payment.*success|paiement.*réussi|paiement.*reussi' \
+            'nouvel achat|nouvelle vente|nouvel abonnement|new sale|new purchase|new subscription|achat valid|vente valid|payment success|paiement réussi|paiement reussi|purchase successful|subscription activated' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Show successful payment context
+        run: |
+          echo "======================================"
+          echo "SUCCESSFUL PAYMENT CONTEXT"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -B 15 \
+            -A 40 \
+            -E \
+            'process_successful_profile_purchase|process_successful_premium_payment' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Show admin send context
+        run: |
+          echo "======================================"
+          echo "ADMIN SEND CONTEXT"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -B 15 \
+            -A 30 \
+            -E \
+            'SUPPORT_ADMIN_TELEGRAM_ID|ADMIN_TELEGRAM_ID|ADMIN_CHAT_ID|ADMIN_ID' \
             . \
             --exclude-dir=".git" \
             --exclude-dir="__pycache__" \
