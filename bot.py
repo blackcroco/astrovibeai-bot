@@ -982,6 +982,18 @@ def main_menu(language="fr"):
         )
     )
 
+    # ASTROVIBE REFERRAL MENU BUTTON
+    if language == "en":
+        referral_button_text = "🤝 Invite a friend"
+    else:
+        referral_button_text = "🤝 Inviter un ami"
+
+    markup.row(
+        types.KeyboardButton(
+            referral_button_text
+        )
+    )
+
     return markup
 def settings_menu(language="fr"):
     markup = types.ReplyKeyboardMarkup(
@@ -2070,7 +2082,78 @@ def menu(message):
             flush=True,
         )
 
-    # ASTROVIBE REFERRAL INVITE ROUTING
+        # ASTROVIBE REFERRAL BUTTON ROUTING
+    if message_text in (
+        "🤝 Inviter un ami",
+        "🤝 Invite a friend",
+    ):
+        from referral_engine import (
+            build_invite_message,
+            get_referral_stats,
+        )
+
+        referral_stats = (
+            get_referral_stats(
+                get_db_connection,
+                user_id,
+            )
+        )
+
+        invite_text = (
+            build_invite_message(
+                user_id,
+                language,
+            )
+        )
+
+        if language == "en":
+            invite_text += (
+                "\n\n📊 Successful referrals: "
+                + str(
+                    referral_stats[
+                        "successful_referrals"
+                    ]
+                )
+                + (
+                    "\n⭐ Referral points "
+                    "earned: "
+                )
+                + str(
+                    referral_stats[
+                        "points_earned"
+                    ]
+                )
+            )
+        else:
+            invite_text += (
+                "\n\n📊 Parrainages réussis : "
+                + str(
+                    referral_stats[
+                        "successful_referrals"
+                    ]
+                )
+                + (
+                    "\n⭐ Points gagnés par "
+                    "parrainage : "
+                )
+                + str(
+                    referral_stats[
+                        "points_earned"
+                    ]
+                )
+            )
+
+        bot.send_message(
+            message.chat.id,
+            invite_text,
+            reply_markup=main_menu(
+                language
+            ),
+        )
+
+        return
+
+# ASTROVIBE REFERRAL INVITE ROUTING
     if command_name == "/invite":
         from referral_engine import (
             build_invite_message,
