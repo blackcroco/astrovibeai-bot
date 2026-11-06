@@ -1,0 +1,1058 @@
+name: Integrate Sale Admin Notifications
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-sale-admin-notifications:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify required files
+        run: |
+          test -f bot.py
+          test -f profile_stars_handlers.py
+          test -f premium_stars_handlers.py
+          test -f profile_purchase_engine.py
+          test -f premium_subscription_engine.py
+
+          echo "REQUIRED PAYMENT FILES FOUND"
+
+      - name: Verify notifications are not installed
+        run: |
+          if test -f sale_notification_engine.py; then
+            echo "sale_notification_engine.py already exists."
+            exit 1
+          fi
+
+          if grep -Rqi \
+            "ASTROVIBE SALE ADMIN NOTIFICATION" \
+            profile_stars_handlers.py \
+            premium_stars_handlers.py
+          then
+            echo "Sale notifications already appear installed."
+            exit 1
+          fi
+
+          echo "SALE NOTIFICATIONS NOT INSTALLED"
+
+      - name: Verify successful payment markers
+        run: |
+          grep -qi \
+            "PROFILE PAYMENT SUCCESS" \
+            profile_stars_handlers.py
+
+          grep -qi \
+            "PREMIUM.*PAYMENT.*SUCCESS" \
+            premium_stars_handlers.py
+
+          echo "PROFILE SUCCESS MARKER FOUND"
+          echo "PREMIUM SUCCESS MARKER FOUND"
+
+      - name: Create sale notification engine
+        run: |
+          cat > sale_notification_engine.py <<'PY'
+          # ==========================================
+          # ASTROVIBE SALE ADMIN NOTIFICATIONS
+          # ==========================================
+          #
+          # This module:
+          # - sends a private operational notification
+          #   after an existing successful-payment path;
+          # - never writes to the database;
+          # - never modifies Profile or Premium rights;
+          # - never changes points or Stars;
+          # - never exposes payment charge identifiers.
+          # ==========================================
+
+          import os
+
+
+          ADMIN_ENV_NAMES = (
+              "SUPPORT_ADMIN_TELEGRAM_ID",
+              "ADMIN_TELEGRAM_ID",
+              "ADMIN_CHAT_ID",
+          )
+
+
+          PRODUCT_CONFIG = {
+              "profile": {
+                  "emoji": "✨",
+                  "title_fr": "Profil Personnel",
+                  "title_en": "Personal Profile",
+                  "amount": 390,
+                  "period_fr": "Achat unique",
+                  "period_en": "One-time purchase",
+              },
+              "premium": {
+                  "emoji": "💎",
+                  "title_fr": "Premium",
+                  "title_en": "Premium",
+                  "amount": 199,
+                  "period_fr": "30 jours",
+                  "period_en": "30 days",
+              },
+          }
+
+
+          def get_admin_chat_id():
+              for variable_name in ADMIN_ENV_NAMES:
+                  value = os.getenv(
+                      variable_name,
+                      "",
+                  ).strip()
+
+                  if not value:
+                      continue
+
+                  try:
+                      return int(value)
+                  except (TypeError, ValueError):
+                      continue
+
+              return None
+
+
+          def build_sale_notification(
+              product,
+              language="fr",
+          ):
+              config = PRODUCT_CONFIG.get(
+                  product
+              )
+
+              if config is None:
+                  raise ValueError(
+                      "Unsupported sale product"
+                  )
+
+              if language == "en":
+                  return "\n".join(
+                      [
+                          "🎉 NEW ASTROVIBE SALE",
+                          "",
+                          (
+                              f"{config['emoji']} "
+                              f"{config['title_en']}"
+                          ),
+                          (
+                              f"⭐ {config['amount']} Stars"
+                          ),
+                          (
+                              f"📅 {config['period_en']}"
+                          ),
+                          "",
+                          "✅ Payment validated",
+                          "🔐 Access processing completed",
+                      ]
+                  )
+
+              return "\n".join(
+                  [
+                      "🎉 NOUVELLE VENTE ASTROVIBE",
+                      "",
+                      (
+                          f"{config['emoji']} "
+                          f"{config['title_fr']}"
+                      ),
+                      (
+                          f"⭐ {config['amount']} Stars"
+                      ),
+                      (
+                          f"📅 {config['period_fr']}"
+                      ),
+                      "",
+                      "✅ Paiement validé",
+                      "🔐 Traitement de l’accès terminé",
+                  ]
+              )
+
+
+          def notify_sale_admin(
+              bot,
+              product,
+              language="fr",
+          ):
+              admin_chat_id = get_admin_chat_id()
+
+              if admin_chat_id is None:
+                  print(
+                      "SALE ADMIN NOTIFICATION SKIPPED: "
+                      "admin chat id unavailable",
+                      flush=True,
+                  )
+
+                  return False
+
+              message_text = build_sale_notification(
+                  product=product,
+                  language=language,
+              )
+
+              try:
+                  bot.send_message(
+                      admin_chat_id,
+                      message_text,
+                      disable_web_page_preview=True,
+                  )
+
+                  print(
+                      "SALE ADMIN NOTIFICATION SENT:",
+                      product,
+                      flush=True,
+                  )
+
+                  return True
+
+              except Exception as error:
+                  print(
+                      "SALE ADMIN NOTIFICATION ERROR:",
+                      product,
+                      repr(error),
+                      flush=True,
+                  )
+
+                  return False
+          PY
+
+          echo "SALE NOTIFICATION ENGINE CREATED"
+
+      - name: Compile sale notification engine
+        run: |
+          python -m py_compile \
+            sale_notification_engine.py
+
+          echo "SALE NOTIFICATION ENGINE COMPILES"
+
+      - name: Test notification engine without Telegram
+        run: |
+          python - <<'PY'
+          import os
+
+          from sale_notification_engine import (
+              build_sale_notification,
+              notify_sale_admin,
+          )
+
+
+          profile_fr = build_sale_notification(
+              "profile",
+              "fr",
+          )
+
+          premium_fr = build_sale_notification(
+              "premium",
+              "fr",
+          )
+
+          profile_en = build_sale_notification(
+              "profile",
+              "en",
+          )
+
+          premium_en = build_sale_notification(
+              "premium",
+              "en",
+          )
+
+          assert "390 Stars" in profile_fr
+          assert "Profil Personnel" in profile_fr
+          assert "Achat unique" in profile_fr
+
+          assert "199 Stars" in premium_fr
+          assert "Premium" in premium_fr
+          assert "30 jours" in premium_fr
+
+          assert "NEW ASTROVIBE SALE" in profile_en
+          assert "One-time purchase" in profile_en
+
+          assert "NEW ASTROVIBE SALE" in premium_en
+          assert "30 days" in premium_en
+
+
+          class FakeBot:
+              def __init__(self):
+                  self.calls = []
+
+              def send_message(
+                  self,
+                  chat_id,
+                  text,
+                  **kwargs,
+              ):
+                  self.calls.append(
+                      {
+                          "chat_id": chat_id,
+                          "text": text,
+                          "kwargs": kwargs,
+                      }
+                  )
+
+
+          previous_value = os.environ.get(
+              "SUPPORT_ADMIN_TELEGRAM_ID"
+          )
+
+          os.environ[
+              "SUPPORT_ADMIN_TELEGRAM_ID"
+          ] = "123456789"
+
+          fake_bot = FakeBot()
+
+          profile_result = notify_sale_admin(
+              fake_bot,
+              "profile",
+              "fr",
+          )
+
+          premium_result = notify_sale_admin(
+              fake_bot,
+              "premium",
+              "fr",
+          )
+
+          assert profile_result is True
+          assert premium_result is True
+
+          assert len(fake_bot.calls) == 2
+
+          assert (
+              fake_bot.calls[0]["chat_id"]
+              == 123456789
+          )
+
+          assert (
+              fake_bot.calls[1]["chat_id"]
+              == 123456789
+          )
+
+          assert (
+              "390 Stars"
+              in fake_bot.calls[0]["text"]
+          )
+
+          assert (
+              "199 Stars"
+              in fake_bot.calls[1]["text"]
+          )
+
+          if previous_value is None:
+              os.environ.pop(
+                  "SUPPORT_ADMIN_TELEGRAM_ID",
+                  None,
+              )
+          else:
+              os.environ[
+                  "SUPPORT_ADMIN_TELEGRAM_ID"
+              ] = previous_value
+
+          print(
+              "SALE NOTIFICATION ENGINE TESTS OK"
+          )
+
+          print(
+              "REAL TELEGRAM MESSAGES SENT: 0"
+          )
+          PY
+
+      - name: Create handler integration patch
+        run: |
+          cat > /tmp/integrate_sale_notifications.py <<'PY'
+          import ast
+          from pathlib import Path
+
+
+          TARGETS = (
+              {
+                  "path": Path(
+                      "profile_stars_handlers.py"
+                  ),
+                  "product": "profile",
+                  "marker_terms": (
+                      "PROFILE PAYMENT SUCCESS",
+                      "PROFILE PURCHASE SUCCESS",
+                  ),
+              },
+              {
+                  "path": Path(
+                      "premium_stars_handlers.py"
+                  ),
+                  "product": "premium",
+                  "marker_terms": (
+                      "PREMIUM PAYMENT SUCCESS",
+                      "PREMIUM SUBSCRIPTION SUCCESS",
+                  ),
+              },
+          )
+
+
+          def get_call_name(
+              node,
+          ):
+              if isinstance(node, ast.Name):
+                  return node.id
+
+              if isinstance(node, ast.Attribute):
+                  return node.attr
+
+              return None
+
+
+          def get_constant_strings(
+              node,
+          ):
+              values = []
+
+              for child in ast.walk(node):
+                  if (
+                      isinstance(
+                          child,
+                          ast.Constant,
+                      )
+                      and isinstance(
+                          child.value,
+                          str,
+                      )
+                  ):
+                      values.append(
+                          child.value
+                      )
+
+              return values
+
+
+          def find_enclosing_function(
+              tree,
+              target_node,
+          ):
+              candidates = []
+
+              for node in ast.walk(tree):
+                  if not isinstance(
+                      node,
+                      (
+                          ast.FunctionDef,
+                          ast.AsyncFunctionDef,
+                      ),
+                  ):
+                      continue
+
+                  if node.end_lineno is None:
+                      continue
+
+                  if (
+                      node.lineno
+                      <= target_node.lineno
+                      <= node.end_lineno
+                  ):
+                      candidates.append(
+                          node
+                      )
+
+              if not candidates:
+                  return None
+
+              return min(
+                  candidates,
+                  key=lambda item: (
+                      item.end_lineno
+                      - item.lineno
+                  ),
+              )
+
+
+          for target in TARGETS:
+              path = target["path"]
+              product = target["product"]
+              marker_terms = target[
+                  "marker_terms"
+              ]
+
+              source = path.read_text(
+                  encoding="utf-8"
+              )
+
+              marker_comment = (
+                  "ASTROVIBE SALE ADMIN "
+                  "NOTIFICATION"
+              )
+
+              if marker_comment in source:
+                  raise RuntimeError(
+                      str(path)
+                      + " already contains "
+                      + marker_comment
+                  )
+
+              tree = ast.parse(source)
+
+              success_statements = []
+
+              for node in ast.walk(tree):
+                  if not isinstance(
+                      node,
+                      ast.Expr,
+                  ):
+                      continue
+
+                  call = node.value
+
+                  if not isinstance(
+                      call,
+                      ast.Call,
+                  ):
+                      continue
+
+                  if get_call_name(
+                      call.func
+                  ) != "print":
+                      continue
+
+                  strings = get_constant_strings(
+                      call
+                  )
+
+                  combined = " ".join(
+                      strings
+                  ).upper()
+
+                  if any(
+                      marker.upper()
+                      in combined
+                      for marker
+                      in marker_terms
+                  ):
+                      success_statements.append(
+                          node
+                      )
+
+              if len(success_statements) != 1:
+                  raise RuntimeError(
+                      (
+                          "Expected exactly one "
+                          "successful payment log in "
+                          f"{path}, found "
+                          f"{len(success_statements)}"
+                      )
+                  )
+
+              success_node = (
+                  success_statements[0]
+              )
+
+              if success_node.end_lineno is None:
+                  raise RuntimeError(
+                      "Missing success statement "
+                      f"end line in {path}"
+                  )
+
+              function_node = (
+                  find_enclosing_function(
+                      tree,
+                      success_node,
+                  )
+              )
+
+              if function_node is None:
+                  raise RuntimeError(
+                      "Successful payment log is not "
+                      f"inside a function in {path}"
+                  )
+
+              argument_names = {
+                  argument.arg
+                  for argument
+                  in function_node.args.args
+              }
+
+              if "bot" not in argument_names:
+                  raise RuntimeError(
+                      "The successful payment handler "
+                      f"in {path} has no bot argument"
+                  )
+
+              lines = source.splitlines(
+                  keepends=True
+              )
+
+              statement_line = lines[
+                  success_node.lineno - 1
+              ]
+
+              indentation = (
+                  statement_line[
+                      :len(statement_line)
+                      - len(
+                          statement_line.lstrip()
+                      )
+                  ]
+              )
+
+              insertion = [
+                  (
+                      f"{indentation}"
+                      "# ASTROVIBE SALE ADMIN "
+                      "NOTIFICATION\n"
+                  ),
+                  (
+                      f"{indentation}"
+                      "try:\n"
+                  ),
+                  (
+                      f"{indentation}    "
+                      "from sale_notification_engine "
+                      "import notify_sale_admin\n"
+                  ),
+                  "\n",
+                  (
+                      f"{indentation}    "
+                      "notify_sale_admin(\n"
+                  ),
+                  (
+                      f"{indentation}        "
+                      "bot=bot,\n"
+                  ),
+                  (
+                      f"{indentation}        "
+                      f'product="{product}",\n'
+                  ),
+                  (
+                      f"{indentation}        "
+                      'language="fr",\n'
+                  ),
+                  (
+                      f"{indentation}    "
+                      ")\n"
+                  ),
+                  (
+                      f"{indentation}"
+                      "except Exception as "
+                      "notification_error:\n"
+                  ),
+                  (
+                      f"{indentation}    "
+                      "print(\n"
+                  ),
+                  (
+                      f"{indentation}        "
+                      '"SALE ADMIN NOTIFICATION '
+                      'UNEXPECTED ERROR:",\n'
+                  ),
+                  (
+                      f"{indentation}        "
+                      "repr(notification_error),\n"
+                  ),
+                  (
+                      f"{indentation}        "
+                      "flush=True,\n"
+                  ),
+                  (
+                      f"{indentation}    "
+                      ")\n"
+                  ),
+              ]
+
+              insertion_index = (
+                  success_node.end_lineno
+              )
+
+              lines[
+                  insertion_index:
+                  insertion_index
+              ] = insertion
+
+              updated_source = "".join(
+                  lines
+              )
+
+              ast.parse(
+                  updated_source
+              )
+
+              if (
+                  updated_source.count(
+                      marker_comment
+                  )
+                  != 1
+              ):
+                  raise RuntimeError(
+                      "Notification marker count "
+                      f"is invalid in {path}"
+                  )
+
+              if (
+                  f'product="{product}"'
+                  not in updated_source
+              ):
+                  raise RuntimeError(
+                      "Product notification call "
+                      f"missing in {path}"
+                  )
+
+              path.write_text(
+                  updated_source,
+                  encoding="utf-8",
+              )
+
+              print(
+                  "SALE NOTIFICATION INTEGRATED:",
+                  path,
+                  product,
+                  "function:",
+                  function_node.name,
+                  "after line:",
+                  success_node.end_lineno,
+              )
+          PY
+
+          echo "HANDLER PATCH CREATED"
+
+      - name: Validate handler integration patch
+        run: |
+          python -m py_compile \
+            /tmp/integrate_sale_notifications.py
+
+          echo "HANDLER PATCH COMPILES"
+
+      - name: Apply handler integration patch
+        run: |
+          python \
+            /tmp/integrate_sale_notifications.py
+
+      - name: Verify notification integrations
+        run: |
+          grep -q \
+            "ASTROVIBE SALE ADMIN NOTIFICATION" \
+            profile_stars_handlers.py
+
+          grep -q \
+            'product="profile"' \
+            profile_stars_handlers.py
+
+          grep -q \
+            "ASTROVIBE SALE ADMIN NOTIFICATION" \
+            premium_stars_handlers.py
+
+          grep -q \
+            'product="premium"' \
+            premium_stars_handlers.py
+
+          echo "PROFILE SALE NOTIFICATION INTEGRATED"
+          echo "PREMIUM SALE NOTIFICATION INTEGRATED"
+
+      - name: Verify notification placement
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+
+          checks = (
+              (
+                  Path(
+                      "profile_stars_handlers.py"
+                  ),
+                  "PROFILE PAYMENT SUCCESS",
+                  'product="profile"',
+              ),
+              (
+                  Path(
+                      "premium_stars_handlers.py"
+                  ),
+                  "PREMIUM PAYMENT SUCCESS",
+                  'product="premium"',
+              ),
+          )
+
+          for (
+              path,
+              success_marker,
+              product_marker,
+          ) in checks:
+              source = path.read_text(
+                  encoding="utf-8"
+              )
+
+              success_position = (
+                  source.upper().find(
+                      success_marker
+                  )
+              )
+
+              product_position = source.find(
+                  product_marker
+              )
+
+              assert (
+                  success_position >= 0
+              ), (
+                  "Missing successful payment "
+                  f"marker in {path}"
+              )
+
+              assert (
+                  product_position > success_position
+              ), (
+                  "Admin notification is not "
+                  "placed after payment success "
+                  f"in {path}"
+              )
+
+              print(
+                  "PLACEMENT OK:",
+                  path,
+              )
+          PY
+
+      - name: Compile complete payment stack
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile \
+            sale_notification_engine.py
+          python -m py_compile \
+            profile_stars_handlers.py
+          python -m py_compile \
+            profile_stars_payment.py
+          python -m py_compile \
+            profile_purchase_engine.py
+          python -m py_compile \
+            premium_stars_handlers.py
+          python -m py_compile \
+            premium_stars_payment.py
+          python -m py_compile \
+            premium_subscription_engine.py
+
+          echo "COMPLETE PAYMENT STACK COMPILES"
+
+      - name: Verify prices remain unchanged
+        run: |
+          grep -Rqi \
+            "390" \
+            profile_stars_handlers.py \
+            profile_stars_payment.py \
+            profile_purchase_engine.py
+
+          grep -Rqi \
+            "199" \
+            premium_stars_handlers.py \
+            premium_stars_payment.py \
+            premium_subscription_engine.py
+
+          echo "PROFILE 390 STARS PRESERVED"
+          echo "PREMIUM 199 STARS PRESERVED"
+
+      - name: Verify invoice payloads preserved
+        run: |
+          grep -q \
+            "astrovibe_profile_v2:" \
+            bot.py
+
+          grep -q \
+            "astrovibe_premium:" \
+            bot.py
+
+          echo "PAYMENT PAYLOADS PRESERVED"
+
+      - name: Verify payment handlers preserved
+        run: |
+          grep -Rqi \
+            "process_successful_profile_purchase" \
+            bot.py \
+            profile_stars_handlers.py \
+            profile_purchase_engine.py
+
+          grep -Rqi \
+            "process_successful_premium_payment" \
+            bot.py \
+            premium_stars_handlers.py \
+            premium_subscription_engine.py
+
+          echo "SUCCESSFUL PAYMENT HANDLERS PRESERVED"
+
+      - name: Verify notification engine is read only
+        run: |
+          if grep -Eiq \
+            'INSERT INTO|UPDATE users|DELETE FROM|commit\(|rollback\(|refundStarPayment|refund_star_payment|createInvoiceLink|send_invoice|points[[:space:]]*-=' \
+            sale_notification_engine.py
+          then
+            echo "Notification engine contains forbidden logic."
+            exit 1
+          fi
+
+          echo "NOTIFICATION ENGINE HAS NO DATABASE WRITES"
+          echo "NOTIFICATION ENGINE HAS NO PAYMENT ACTIONS"
+
+      - name: Verify no sensitive payment data is sent
+        run: |
+          if grep -Eiq \
+            'telegram_payment_charge_id|provider_payment_charge_id|DATABASE_URL|BOT_TOKEN|GROQ_API_KEY' \
+            sale_notification_engine.py
+          then
+            echo "Sensitive identifier reference detected."
+            exit 1
+          fi
+
+          echo "NO SENSITIVE PAYMENT IDENTIFIERS INCLUDED"
+
+      - name: Verify other production systems
+        run: |
+          test -f referral_engine.py
+          test -f level_rewards_engine.py
+          test -f paysupport_engine.py
+          test -f paysupport_admin.py
+          test -f paysupport_ai.py
+          test -f terms_engine.py
+
+          python -m py_compile referral_engine.py
+          python -m py_compile level_rewards_engine.py
+          python -m py_compile paysupport_engine.py
+          python -m py_compile paysupport_admin.py
+          python -m py_compile paysupport_ai.py
+          python -m py_compile terms_engine.py
+
+          grep -q \
+            "ASTROVIBE REFERRAL START CAPTURE" \
+            bot.py
+
+          grep -q \
+            "ASTROVIBE LEVEL REWARDS ROUTING" \
+            bot.py
+
+          grep -q \
+            'command_name == "/terms"' \
+            bot.py
+
+          grep -q \
+            'command_name == "/paysupport"' \
+            bot.py
+
+          echo "OTHER PRODUCTION SYSTEMS PRESERVED"
+
+      - name: Remove Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} +
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete
+
+          echo "PYTHON CACHE REMOVED"
+
+      - name: Verify only expected files changed
+        run: |
+          python - <<'PY'
+          import subprocess
+
+
+          result = subprocess.run(
+              [
+                  "git",
+                  "status",
+                  "--porcelain",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+
+          changed = set()
+
+          for line in result.stdout.splitlines():
+              if not line.strip():
+                  continue
+
+              path = line[3:].strip()
+
+              changed.add(path)
+
+          expected = {
+              "profile_stars_handlers.py",
+              "premium_stars_handlers.py",
+              "sale_notification_engine.py",
+          }
+
+          assert changed == expected, (
+              "Unexpected changed files: "
+              + repr(sorted(changed))
+          )
+
+          print(
+              "ONLY EXPECTED FILES CHANGED"
+          )
+
+          for path in sorted(changed):
+              print(
+                  "CHANGED:",
+                  path,
+              )
+          PY
+
+      - name: Show integration diff
+        run: |
+          git diff \
+            -- profile_stars_handlers.py
+
+          git diff \
+            -- premium_stars_handlers.py
+
+          git diff \
+            --no-index \
+            /dev/null \
+            sale_notification_engine.py \
+            || true
+
+      - name: Commit sale notifications
+        run: |
+          git add \
+            profile_stars_handlers.py \
+            premium_stars_handlers.py \
+            sale_notification_engine.py
+
+          if git diff --cached --quiet; then
+            echo "No sale notification changes."
+            exit 1
+          fi
+
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit \
+            -m "Add admin notifications for AstroVibe sales"
+
+          git push
+
+      - name: Final validation
+        run: |
+          echo "======================================"
+          echo "SALE ADMIN NOTIFICATIONS INTEGRATED"
+          echo "======================================"
+          echo "Profile notification: YES"
+          echo "Premium notification: YES"
+          echo "Profile price changed: NO"
+          echo "Premium price changed: NO"
+          echo "Payment logic changed: NO"
+          echo "Database writes added: 0"
+          echo "Points modified: 0"
+          echo "Sensitive payment IDs exposed: 0"
+          echo "Real Telegram messages during tests: 0"
+          echo "Real payments during tests: 0"
