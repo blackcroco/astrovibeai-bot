@@ -3583,6 +3583,23 @@ def handle_profile_pre_checkout(query):
     content_types=["successful_payment"]
 )
 def handle_profile_successful_payment(message):
+    # ASTROVIBE SALE ADMIN NOTIFICATION
+    try:
+        from sale_notification_engine import notify_sale_admin
+
+        notify_sale_admin(
+            bot=bot,
+            product="premium",
+        )
+    except Exception as sale_notification_error:
+        print(
+            "SALE ADMIN NOTIFICATION UNEXPECTED ERROR:",
+            repr(
+                sale_notification_error
+            ),
+            flush=True,
+        )
+
     payment = message.successful_payment
 
     if (
@@ -3708,6 +3725,23 @@ def astro_profile_pre_checkout(query):
     content_types=["successful_payment"]
 )
 def astro_profile_successful_payment(message):
+    # ASTROVIBE SALE ADMIN NOTIFICATION
+    try:
+        from sale_notification_engine import notify_sale_admin
+
+        notify_sale_admin(
+            bot=bot,
+            product="profile",
+        )
+    except Exception as sale_notification_error:
+        print(
+            "SALE ADMIN NOTIFICATION UNEXPECTED ERROR:",
+            repr(
+                sale_notification_error
+            ),
+            flush=True,
+        )
+
     payment = message.successful_payment
 
     if not isinstance(
