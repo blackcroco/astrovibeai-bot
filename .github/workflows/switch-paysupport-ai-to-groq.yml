@@ -19,6 +19,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install AI dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install openai pydantic
+
+          echo "AI DEPENDENCIES INSTALLED"
+
       - name: Verify required files
         run: |
           test -f paysupport_ai.py
@@ -30,9 +37,9 @@ jobs:
 
           echo "REQUIRED FILES OK"
 
-      - name: Patch AI provider to Groq
+      - name: Create Groq provider patch
         run: |
-          python - <<'PY'
+          cat > /tmp/switch_to_groq.py <<'PY'
           from pathlib import Path
 
           path = Path("paysupport_ai.py")
@@ -41,37 +48,39 @@ jobs:
               encoding="utf-8"
           )
 
-          marker = (
+          provider_marker = (
               "# GROQ FREE AI PROVIDER"
           )
 
-          if marker in source:
+          if provider_marker in source:
               raise RuntimeError(
                   "Groq provider already installed."
               )
 
-          old_api_env = (
+          old_key_config = (
               'SUPPORT_AI_API_KEY_ENV = '
               '"OPENAI_API_KEY"'
           )
 
-          if old_api_env not in source:
+          new_key_config = (
+              'SUPPORT_AI_API_KEY_ENV = '
+              '"GROQ_API_KEY"\n\n'
+              'SUPPORT_AI_PROVIDER_ENV = '
+              '"SUPPORT_AI_PROVIDER"\n\n'
+              'GROQ_BASE_URL = '
+              '"https://api.groq.com/openai/v1"\n\n'
+              '# GROQ FREE AI PROVIDER'
+          )
+
+          if old_key_config not in source:
               raise RuntimeError(
-                  "OpenAI API key configuration "
-                  "marker not found."
+                  "Original API key configuration "
+                  "not found."
               )
 
           source = source.replace(
-              old_api_env,
-              (
-                  'SUPPORT_AI_API_KEY_ENV = '
-                  '"GROQ_API_KEY"\n\n'
-                  'SUPPORT_AI_PROVIDER_ENV = '
-                  '"SUPPORT_AI_PROVIDER"\n\n'
-                  'GROQ_BASE_URL = '
-                  '"https://api.groq.com/openai/v1"\n\n'
-                  '# GROQ FREE AI PROVIDER'
-              ),
+              old_key_config,
+              new_key_config,
               1,
           )
 
@@ -104,8 +113,8 @@ jobs:
 
           if old_client not in source:
               raise RuntimeError(
-                  "OpenAI client initialization "
-                  "not found."
+                  "Original OpenAI client "
+                  "initialization not found."
               )
 
           source = source.replace(
@@ -124,7 +133,17 @@ jobs:
           )
           PY
 
-      - name: Compile AI engine
+      - name: Validate patch script
+        run: |
+          python -m py_compile /tmp/switch_to_groq.py
+
+          echo "PATCH SCRIPT VALID"
+
+      - name: Apply Groq provider patch
+        run: |
+          python /tmp/switch_to_groq.py
+
+      - name: Compile production files
         run: |
           python -m py_compile paysupport_ai.py
           python -m py_compile paysupport_admin.py
@@ -132,9 +151,9 @@ jobs:
           python -m py_compile paysupport_flow.py
           python -m py_compile bot.py
 
-          echo "AI STACK COMPILES"
+          echo "PRODUCTION FILES COMPILE"
 
-      - name: Verify Groq configuration
+      - name: Verify Groq provider configuration
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -146,31 +165,35 @@ jobs:
           )
 
           required = (
-              "GROQ FREE AI PROVIDER",
+              "# GROQ FREE AI PROVIDER",
               '"GROQ_API_KEY"',
               '"SUPPORT_AI_PROVIDER"',
               "https://api.groq.com/openai/v1",
-              "provider != \"groq\"",
-              "base_url=GROQ_BASE_URL",
+              'provider != "groq"',
               "api_key=api_key",
+              "base_url=GROQ_BASE_URL",
           )
 
           for marker in required:
               assert marker in source, marker
               print(
-                  "GROQ OK:",
+                  "GROQ CONFIG OK:",
                   marker,
               )
 
-          assert (
+          old_configuration = (
               'SUPPORT_AI_API_KEY_ENV = '
               '"OPENAI_API_KEY"'
+          )
+
+          assert (
+              old_configuration
               not in source
           )
 
           print(
-              "OPENAI BILLING KEY REMOVED "
-              "FROM AI PROVIDER CONFIG"
+              "OLD OPENAI PROVIDER "
+              "CONFIGURATION REMOVED"
           )
           PY
 
@@ -213,7 +236,7 @@ jobs:
           )
           PY
 
-      - name: Test sensitive payment still avoids AI
+      - name: Test sensitive payment protection
         env:
           GROQ_API_KEY: "fake-groq-test-key"
           SUPPORT_AI_PROVIDER: "groq"
@@ -225,13 +248,15 @@ jobs:
               analyze_support_ticket,
           )
 
+
           class ForbiddenClient:
               @property
               def responses(self):
                   raise AssertionError(
-                      "Sensitive payment ticket "
-                      "must not call AI"
+                      "Sensitive payment must "
+                      "not call the AI provider"
                   )
+
 
           ticket = {
               "ticket_code": "AV-GROQ01",
@@ -261,7 +286,7 @@ jobs:
           )
           PY
 
-      - name: Test safe fake Groq response
+      - name: Test safe Groq decision contract
         env:
           GROQ_API_KEY: "fake-groq-test-key"
           SUPPORT_AI_PROVIDER: "groq"
@@ -276,6 +301,7 @@ jobs:
               analyze_support_ticket,
           )
 
+
           class FakeResponses:
               def parse(
                   self,
@@ -286,6 +312,11 @@ jobs:
                   assert (
                       model
                       == "openai/gpt-oss-20b"
+                  )
+
+                  assert (
+                      text_format
+                      is SupportAIResult
                   )
 
                   return SimpleNamespace(
@@ -309,9 +340,11 @@ jobs:
                       )
                   )
 
+
           class FakeClient:
               def __init__(self):
                   self.responses = FakeResponses()
+
 
           ticket = {
               "ticket_code": "AV-GROQ02",
@@ -338,7 +371,49 @@ jobs:
           assert "199" in result.user_reply
 
           print(
-              "SAFE GROQ AI CONTRACT OK"
+              "SAFE GROQ DECISION CONTRACT OK"
+          )
+          PY
+
+      - name: Test unsupported provider fallback
+        env:
+          GROQ_API_KEY: "fake-groq-test-key"
+          SUPPORT_AI_PROVIDER: "invalid-provider"
+          SUPPORT_AI_MODEL: "openai/gpt-oss-20b"
+        run: |
+          python - <<'PY'
+          from paysupport_ai import (
+              DECISION_ESCALATE,
+              analyze_support_ticket,
+          )
+
+          ticket = {
+              "ticket_code": "AV-GROQ03",
+              "language": "fr",
+              "category": "other",
+              "product": None,
+              "user_message": (
+                  "Quelle est l'offre Premium ?"
+              ),
+          }
+
+          result = analyze_support_ticket(
+              ticket
+          )
+
+          assert (
+              result.decision
+              == DECISION_ESCALATE
+          )
+
+          assert (
+              result.reason
+              == "Unsupported AI provider"
+          )
+
+          print(
+              "UNSUPPORTED PROVIDER "
+              "HUMAN FALLBACK OK"
           )
           PY
 
@@ -352,7 +427,7 @@ jobs:
 
           echo "HUMAN SUPPORT PRESERVED"
 
-      - name: Verify AI support connection preserved
+      - name: Verify AI connection preserved
         run: |
           grep -q "ASTROVIBE SUPPORT AI ROUTING" bot.py
           grep -q "analyze_support_ticket" bot.py
@@ -374,25 +449,57 @@ jobs:
           echo "PREMIUM PRESERVED"
           echo "TERMS PRESERVED"
 
+      - name: Verify runtime dependencies
+        run: |
+          grep -Eiq '^openai([<>=~!].*)?$' requirements.txt
+          grep -Eiq '^pydantic([<>=~!].*)?$' requirements.txt
+
+          echo "OPENAI CLIENT DEPENDENCY OK"
+          echo "PYDANTIC DEPENDENCY OK"
+
       - name: Remove Python cache
         run: |
           find . -type d -name "__pycache__" -prune -exec rm -rf {} +
           find . -type f -name "*.pyc" -delete
 
+          echo "PYTHON CACHE REMOVED"
+
       - name: Verify only AI engine changed
         run: |
-          CHANGED="$(git diff --name-only)"
+          python - <<'PY'
+          import subprocess
 
-          echo "$CHANGED"
+          result = subprocess.run(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
 
-          if [ "$CHANGED" != "paysupport_ai.py" ]; then
-            echo "Unexpected changed files"
-            exit 1
-          fi
+          changed = {
+              line.strip()
+              for line
+              in result.stdout.splitlines()
+              if line.strip()
+          }
 
-          echo "ONLY PAYSUPPORT_AI.PY CHANGED"
+          assert changed == {
+              "paysupport_ai.py"
+          }, (
+              "Unexpected changed files: "
+              + repr(sorted(changed))
+          )
 
-      - name: Show AI provider change
+          print(
+              "ONLY PAYSUPPORT_AI.PY CHANGED"
+          )
+          PY
+
+      - name: Show provider change
         run: |
           git diff -- paysupport_ai.py
 
