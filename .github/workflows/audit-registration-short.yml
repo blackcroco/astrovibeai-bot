@@ -1,0 +1,157 @@
+name: Audit Registration Short
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Short registration audit
+        shell: bash
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "ASTROVIBE SHORT REGISTRATION AUDIT"
+          echo "READ ONLY - NO EXIT 1"
+          echo "======================================"
+
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [
+              p for p in Path(".").rglob("*.py")
+              if ".git" not in p.parts
+              and "__pycache__" not in p.parts
+          ]
+
+          patterns = [
+              r"INSERT\s+INTO\s+(users|utilisateurs)",
+              r"create_user",
+              r"save_user",
+              r"register_user",
+              r"registration.*complete",
+              r"inscription.*termin",
+              r"onboarding.*complete",
+              r"birth_request",
+              r"referral",
+              r"referrer",
+              r"parrain",
+              r"filleul",
+          ]
+
+          rx = re.compile("|".join(patterns), re.I)
+
+          blocks = []
+
+          for path in files:
+              try:
+                  lines = path.read_text(
+                      encoding="utf-8",
+                      errors="replace"
+                  ).splitlines()
+              except Exception:
+                  continue
+
+              for i, line in enumerate(lines):
+                  if not rx.search(line):
+                      continue
+
+                  start = max(0, i - 8)
+                  end = min(len(lines), i + 26)
+
+                  context = "\n".join(lines[start:end])
+
+                  # On garde seulement les zones qui ressemblent
+                  # réellement à la fin de l'onboarding.
+                  if not re.search(
+                      r"send_message|reply_text|reply_markup|"
+                      r"InlineKeyboard|ReplyKeyboard|"
+                      r"menu|welcome|bienvenue|ready|prêt|pret|"
+                      r"points|referral|parrain|filleul",
+                      context,
+                      re.I,
+                  ):
+                      continue
+
+                  blocks.append(
+                      (path, i + 1, start + 1, end, lines[start:end])
+                  )
+
+          print()
+          print("=== CANDIDATE INSERTION POINTS ===")
+
+          if not blocks:
+              print("NOT FOUND")
+          else:
+              # Maximum 6 blocs pour garder un rapport court.
+              for number, (path, match_line, first, last, lines) \
+                  in enumerate(blocks[:6], 1):
+
+                  print()
+                  print(
+                      f"--- CANDIDATE {number} ---"
+                  )
+                  print(f"FILE: {path}")
+                  print(f"MATCH LINE: {match_line}")
+
+                  for offset, text in enumerate(lines, first):
+                      marker = ">>" if offset == match_line else "  "
+                      print(
+                          f"{marker} {offset:5d}: {text}"
+                      )
+
+          print()
+          print("=== EXISTING NEWS BRIDGE ===")
+
+          news_found = False
+
+          for path in files:
+              try:
+                  text = path.read_text(
+                      encoding="utf-8",
+                      errors="replace"
+                  )
+              except Exception:
+                  continue
+
+              if (
+                  "AstroVibeOfficial" in text
+                  or "AstroVibe News" in text
+              ):
+                  news_found = True
+                  print(f"FOUND IN: {path}")
+
+          if not news_found:
+              print("NOT FOUND")
+
+          print()
+          print("=== TARGET BUTTON ===")
+          print("LABEL: 🌌 AstroVibe News")
+          print("URL: https://t.me/AstroVibeOfficial")
+
+          print()
+          print("=== READ ONLY CONFIRMATION ===")
+          print("Repository writes: 0")
+          print("Database writes: 0")
+          print("Telegram calls: 0")
+          print("Payments: 0")
+          print("Referral changes: 0")
+          print("Intentional failures: 0")
+
+          # Sortie normale garantie.
+          raise SystemExit(0)
+          PY
+
+          true
