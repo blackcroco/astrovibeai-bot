@@ -1,0 +1,494 @@
+name: Audit Personal Profile Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-personal-profile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Repository information
+        run: |
+          echo "======================================"
+          echo "ASTROVIBE PERSONAL PROFILE AUDIT"
+          echo "======================================"
+          echo "MODE: READ ONLY"
+          echo
+
+          if test -f bot.py; then
+            echo "bot.py: FOUND"
+          else
+            echo "bot.py: NOT FOUND"
+          fi
+
+          echo
+          echo "No repository modification is intended."
+
+      - name: Profile related files
+        run: |
+          echo "======================================"
+          echo "PROFILE RELATED FILES"
+          echo "======================================"
+
+          find . \
+            -maxdepth 3 \
+            -type f \
+            \( \
+              -iname "*profile*.py" \
+              -o -iname "*astro*.py" \
+              -o -iname "*birth*.py" \
+              -o -iname "*natal*.py" \
+              -o -iname "*chart*.py" \
+              -o -iname "*ephemeris*.py" \
+            \) \
+            -not -path "./.git/*" \
+            -not -path "*/__pycache__/*" \
+            -print \
+            | sort \
+            || true
+
+      - name: Profile entry points
+        run: |
+          echo "======================================"
+          echo "PROFILE ENTRY POINTS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'send_personal_profile|personal_profile|profile_v2|profile_purchase|astrovibe_profile|profil astro|personal profile' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Astronomical libraries
+        run: |
+          echo "======================================"
+          echo "ASTRONOMICAL LIBRARIES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            --include="requirements.txt" \
+            --include="pyproject.toml" \
+            --include="Pipfile" \
+            -Ei \
+            'swisseph|pyswisseph|kerykeion|flatlib|ephemeris|ephem|skyfield|astropy|vedastro|swe\.' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Birth information usage
+        run: |
+          echo "======================================"
+          echo "BIRTH INFORMATION USAGE"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'birth_date|birth_time|birth_place|birth_city|date_of_birth|time_of_birth|place_of_birth|heure.*naissance|date.*naissance|lieu.*naissance' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Coordinates and timezone
+        run: |
+          echo "======================================"
+          echo "COORDINATES AND TIMEZONE"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'latitude|longitude|coordinates|timezone|time_zone|tzinfo|zoneinfo|pytz|timezonefinder|geocod|nominatim|utc_offset|localize' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Planet references
+        run: |
+          echo "======================================"
+          echo "PLANET REFERENCES"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'sun|soleil|moon|lune|mercury|mercure|venus|vénus|mars|jupiter|saturn|saturne|uranus|neptune|pluto|pluton' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Planet position logic
+        run: |
+          echo "======================================"
+          echo "PLANET POSITION LOGIC"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'calc_ut|swe\.calc|planet_position|planet_positions|planet_longitude|natal_positions|birth_chart|natal_chart|chart_data|julday|julian_day' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Ascendant calculations
+        run: |
+          echo "======================================"
+          echo "ASCENDANT CALCULATIONS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'ascendant|rising_sign|rising sign|calculate_ascendant|compute_ascendant|ascendant_degree|ascendant_longitude' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: House calculations
+        run: |
+          echo "======================================"
+          echo "HOUSE CALCULATIONS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'house_cusps|houses_ex|swe\.houses|calculate_houses|compute_houses|house_number|house_position|astrological houses|maisons astrologiques' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Zodiac conversion logic
+        run: |
+          echo "======================================"
+          echo "ZODIAC CONVERSION LOGIC"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'longitude_to_sign|degree_to_sign|zodiac_sign|sign_from|planet.*sign|sign.*degree' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Aspect calculations
+        run: |
+          echo "======================================"
+          echo "ASPECTS AND ORBS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'aspect|orb|conjunction|conjonction|opposition|trine|trigone|square|carré|sextile|angular_distance' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Profile interpretation linkage
+        run: |
+          echo "======================================"
+          echo "PROFILE INTERPRETATION LINKAGE"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'planet_interpret|placement_interpret|interpret_planet|interpret_house|interpret_ascendant|profile_section|profile_sections|planet_sign|house_meaning|placement_meaning|interpretation' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Static interpretation banks
+        run: |
+          echo "======================================"
+          echo "STATIC INTERPRETATION BANKS"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -Ei \
+            'profile_texts|planet_texts|placement_texts|sign_texts|house_texts|ascendant_texts|interpretations|planet_descriptions|sign_descriptions|house_descriptions' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Random logic in Profile files
+        run: |
+          echo "======================================"
+          echo "RANDOM LOGIC IN PROFILE FILES"
+          echo "======================================"
+
+          FOUND_FILES="no"
+          FOUND_RANDOM="no"
+
+          while IFS= read -r FILE
+          do
+            if test -z "$FILE"; then
+              continue
+            fi
+
+            FOUND_FILES="yes"
+
+            RESULT="$(
+              grep -nEi \
+                'import random|from random|random\.|Random\(|choice\(|randint\(|shuffle\(|sample\(|seed\(' \
+                "$FILE" \
+                2>/dev/null \
+                || true
+            )"
+
+            if test -n "$RESULT"; then
+              FOUND_RANDOM="yes"
+              echo
+              echo "FILE: $FILE"
+              echo "$RESULT"
+            fi
+          done <<EOF
+          $(find . \
+            -maxdepth 3 \
+            -type f \
+            \( \
+              -iname "*profile*.py" \
+              -o -iname "*birth*.py" \
+              -o -iname "*natal*.py" \
+              -o -iname "*chart*.py" \
+            \) \
+            -not -path "./.git/*" \
+            -not -path "*/__pycache__/*" \
+            -print)
+          EOF
+
+          echo
+
+          if test "$FOUND_FILES" = "no"; then
+            echo "PROFILE FILES: NOT FOUND"
+          fi
+
+          if test "$FOUND_RANDOM" = "yes"; then
+            echo "PROFILE RANDOM LOGIC: DETECTED"
+          else
+            echo "PROFILE RANDOM LOGIC: NOT DETECTED"
+          fi
+
+      - name: AI usage related to Profile
+        run: |
+          echo "======================================"
+          echo "AI USAGE RELATED TO PROFILE"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -B 10 \
+            -A 25 \
+            -Ei \
+            'send_personal_profile|personal_profile|profile_v2|profile_generation' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            | grep -Ei \
+              'groq|openai|chat\.completions|responses\.create|generate_content|llm|prompt|model=|personal_profile|profile_v2' \
+            || true
+
+      - name: Personal Profile generator context
+        run: |
+          echo "======================================"
+          echo "PERSONAL PROFILE GENERATOR CONTEXT"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -B 25 \
+            -A 120 \
+            -Ei \
+            'def .*personal.*profile|def .*profile.*generation|def send_personal_profile|def generate_personal_profile|def build_personal_profile' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Celestial calculation context
+        run: |
+          echo "======================================"
+          echo "CELESTIAL CALCULATION CONTEXT"
+          echo "======================================"
+
+          grep -Rni \
+            --include="*.py" \
+            -B 20 \
+            -A 80 \
+            -Ei \
+            'calc_ut|swe\.calc|julday|swe\.houses|houses_ex|planet_positions|natal_positions|calculate_ascendant|calculate_houses' \
+            . \
+            --exclude-dir=".git" \
+            --exclude-dir="__pycache__" \
+            || true
+
+      - name: Profile claim indicators
+        run: |
+          echo "======================================"
+          echo "PROFILE CLAIM INDICATORS"
+          echo "======================================"
+
+          check_indicator () {
+            LABEL="$1"
+            PATTERN="$2"
+
+            if grep -Rqi \
+              --include="*.py" \
+              -E "$PATTERN" \
+              . \
+              --exclude-dir=".git" \
+              --exclude-dir="__pycache__"
+            then
+              echo "$LABEL: YES"
+            else
+              echo "$LABEL: NOT FOUND"
+            fi
+          }
+
+          check_indicator \
+            "BIRTH DATE REFERENCE" \
+            'birth_date|date_of_birth'
+
+          check_indicator \
+            "BIRTH TIME REFERENCE" \
+            'birth_time|time_of_birth'
+
+          check_indicator \
+            "LOCATION REFERENCE" \
+            'birth_place|birth_city|place_of_birth|latitude|longitude|coordinates'
+
+          check_indicator \
+            "TIMEZONE REFERENCE" \
+            'timezone|time_zone|tzinfo|ZoneInfo|pytz'
+
+          check_indicator \
+            "PLANET CALCULATION INDICATOR" \
+            'calc_ut|swe\.calc|planet_positions|natal_positions|birth_chart|natal_chart'
+
+          check_indicator \
+            "ASCENDANT INDICATOR" \
+            'ascendant|rising_sign'
+
+          check_indicator \
+            "HOUSE CALCULATION INDICATOR" \
+            'swe\.houses|houses_ex|house_cusps|calculate_houses|compute_houses'
+
+          check_indicator \
+            "ASPECT INDICATOR" \
+            'aspect|orb|conjunction|opposition|trine|square|sextile'
+
+          check_indicator \
+            "PROFILE INTERPRETATION INDICATOR" \
+            'interpretation|interpret_planet|interpret_house|planet_texts|placement_texts|sign_texts'
+
+      - name: Optional Python syntax check
+        run: |
+          echo "======================================"
+          echo "OPTIONAL PYTHON SYNTAX CHECK"
+          echo "======================================"
+
+          for FILE in \
+            bot.py \
+            profile_purchase_engine.py \
+            profile_stars_payment.py \
+            profile_stars_handlers.py
+          do
+            if test -f "$FILE"; then
+              if python -m py_compile "$FILE"
+              then
+                echo "$FILE: COMPILES"
+              else
+                echo "$FILE: COMPILE NOTICE"
+              fi
+            else
+              echo "$FILE: NOT FOUND"
+            fi
+          done
+
+          echo "SYNTAX CHECK COMPLETE"
+
+      - name: Remove audit Python cache
+        run: |
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} + \
+            2>/dev/null \
+            || true
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete \
+            2>/dev/null \
+            || true
+
+          echo "TEMPORARY PYTHON CACHE REMOVED"
+
+      - name: Repository status after audit
+        run: |
+          echo "======================================"
+          echo "REPOSITORY STATUS AFTER AUDIT"
+          echo "======================================"
+
+          CHANGED="$(
+            git status \
+              --porcelain \
+              2>/dev/null \
+              || true
+          )"
+
+          if test -z "$CHANGED"; then
+            echo "REPOSITORY CHANGES: 0"
+          else
+            echo "NOTICE: repository status is not clean."
+            echo "The audit itself does not commit or push anything."
+          fi
+
+      - name: Final read only confirmation
+        run: |
+          echo "======================================"
+          echo "PERSONAL PROFILE AUDIT COMPLETE"
+          echo "======================================"
+          echo "Audit result failures forced: NO"
+          echo "Repository commits: 0"
+          echo "Repository pushes: 0"
+          echo "Database writes: 0"
+          echo "Telegram messages sent: 0"
+          echo "Payments initiated: 0"
+          echo "Profile rights changed: 0"
+          echo "Premium rights changed: 0"
