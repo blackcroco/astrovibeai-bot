@@ -1,0 +1,472 @@
+name: Audit Registration News Bridge Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-registration-news-bridge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit registration and News bridge
+        shell: bash
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "ASTROVIBE NEWS BRIDGE AUDIT"
+          echo "======================================"
+          echo "Mode: READ ONLY"
+          echo "Intentional exit 1: NO"
+          echo "Repository writes: 0"
+          echo "Database writes: 0"
+          echo "Telegram messages sent: 0"
+          echo "Payments initiated: 0"
+          echo "Referral rewards changed: 0"
+          echo
+
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path(".")
+          PYTHON_FILES = sorted(
+              path
+              for path in ROOT.rglob("*.py")
+              if ".git" not in path.parts
+              and "__pycache__" not in path.parts
+              and ".venv" not in path.parts
+              and "venv" not in path.parts
+          )
+
+          def title(text):
+              print()
+              print("=" * 70)
+              print(text)
+              print("=" * 70)
+
+          def read_file(path):
+              try:
+                  return path.read_text(
+                      encoding="utf-8",
+                      errors="replace",
+                  )
+              except Exception as exc:
+                  print(f"NOTICE: impossible de lire {path}: {exc}")
+                  return ""
+
+          def show_matches(
+              heading,
+              patterns,
+              before=8,
+              after=20,
+              file_filter=None,
+              max_blocks=30,
+          ):
+              title(heading)
+
+              compiled = [
+                  re.compile(pattern, re.IGNORECASE)
+                  for pattern in patterns
+              ]
+
+              found = 0
+
+              for path in PYTHON_FILES:
+                  if file_filter and not file_filter(path):
+                      continue
+
+                  text = read_file(path)
+                  if not text:
+                      continue
+
+                  lines = text.splitlines()
+
+                  for index, line in enumerate(lines):
+                      if not any(pattern.search(line) for pattern in compiled):
+                          continue
+
+                      found += 1
+                      start = max(0, index - before)
+                      end = min(len(lines), index + after + 1)
+
+                      print()
+                      print(f"FILE: {path}")
+                      print(f"MATCH LINE: {index + 1}")
+                      print("-" * 70)
+
+                      for line_number in range(start, end):
+                          marker = ">>" if line_number == index else "  "
+                          print(
+                              f"{marker} {line_number + 1:5d}: "
+                              f"{lines[line_number]}"
+                          )
+
+                      print("-" * 70)
+
+                      if found >= max_blocks:
+                          print(
+                              f"NOTICE: affichage limité à {max_blocks} blocs."
+                          )
+                          print(f"Résultats trouvés au minimum: {found}")
+                          return found
+
+              if found == 0:
+                  print("NOT FOUND")
+              else:
+                  print()
+                  print(f"MATCHING BLOCKS SHOWN: {found}")
+
+              return found
+
+          title("REPOSITORY INFORMATION")
+
+          print(f"Python files discovered: {len(PYTHON_FILES)}")
+
+          if Path("bot.py").exists():
+              print("bot.py: FOUND")
+          else:
+              print("bot.py: NOT FOUND")
+
+          print()
+          print("Python files:")
+          for path in PYTHON_FILES:
+              print(f"- {path}")
+
+          show_matches(
+              "START HANDLERS AND DEEP LINKS",
+              [
+                  r"CommandHandler\s*\([^,\n]*[\"']start[\"']",
+                  r"\bdef\s+\w*start\w*\s*\(",
+                  r"\basync\s+def\s+\w*start\w*\s*\(",
+                  r"/start",
+                  r"start_param",
+                  r"start_parameter",
+                  r"context\.args",
+                  r"startPayload",
+              ],
+              before=12,
+              after=45,
+              max_blocks=25,
+          )
+
+          show_matches(
+              "REFERRAL ENTRY POINTS",
+              [
+                  r"\bref_",
+                  r"referral",
+                  r"referrer",
+                  r"referred",
+                  r"parrain",
+                  r"filleul",
+                  r"invite.*friend",
+                  r"referral_code",
+                  r"inviter.*ami",
+              ],
+              before=15,
+              after=55,
+              max_blocks=35,
+          )
+
+          show_matches(
+              "REFERRAL REWARD LOGIC",
+              [
+                  r"\+\s*50",
+                  r"\+\s*20",
+                  r"50\s*(points|xp)",
+                  r"20\s*(points|xp)",
+                  r"referrer.*points",
+                  r"referred.*points",
+                  r"referral.*reward",
+                  r"parrain.*points",
+                  r"filleul.*points",
+              ],
+              before=20,
+              after=55,
+              max_blocks=30,
+          )
+
+          show_matches(
+              "USER CREATION AND REGISTRATION STORAGE",
+              [
+                  r"INSERT\s+INTO\s+(users|utilisateurs)",
+                  r"create_user",
+                  r"save_user",
+                  r"register_user",
+                  r"new_user",
+                  r"user_created",
+                  r"registration_complete",
+                  r"registration_completed",
+                  r"onboarding_complete",
+                  r"created_at",
+              ],
+              before=20,
+              after=65,
+              max_blocks=35,
+          )
+
+          show_matches(
+              "BIRTH DATA ONBOARDING",
+              [
+                  r"birth_request",
+                  r"birth_date",
+                  r"birth_time",
+                  r"birth_place",
+                  r"birth_city",
+                  r"birth_timezone",
+                  r"birth_latitude",
+                  r"birth_longitude",
+                  r"date.*naissance",
+                  r"heure.*naissance",
+                  r"lieu.*naissance",
+              ],
+              before=15,
+              after=45,
+              max_blocks=35,
+          )
+
+          show_matches(
+              "REGISTRATION COMPLETION MESSAGES",
+              [
+                  r"registration.*(complete|success|ready)",
+                  r"onboarding.*(complete|success|ready)",
+                  r"inscription.*(termin|réussi|reussi|prêt|pret)",
+                  r"profile.*ready",
+                  r"profil.*prêt",
+                  r"profil.*pret",
+                  r"astrovibe.*ready",
+                  r"astroVibe.*prêt",
+                  r"bienvenue.*astro",
+                  r"welcome.*astro",
+                  r"adventure.*starts",
+                  r"aventure.*commence",
+              ],
+              before=20,
+              after=70,
+              max_blocks=30,
+          )
+
+          show_matches(
+              "MESSAGES AND KEYBOARDS NEAR ONBOARDING",
+              [
+                  r"send_message\s*\(",
+                  r"reply_text\s*\(",
+                  r"edit_message_text\s*\(",
+                  r"\.reply\s*\(",
+                  r"bot\.send",
+                  r"reply_markup\s*=",
+                  r"InlineKeyboardMarkup",
+                  r"InlineKeyboardButton",
+                  r"ReplyKeyboardMarkup",
+                  r"KeyboardButton",
+              ],
+              before=12,
+              after=35,
+              file_filter=lambda path: (
+                  path.name == "bot.py"
+                  or "registration" in path.name.lower()
+                  or "onboarding" in path.name.lower()
+                  or "referral" in path.name.lower()
+              ),
+              max_blocks=45,
+          )
+
+          show_matches(
+              "EXISTING URL BUTTON EXAMPLES",
+              [
+                  r"InlineKeyboardButton\s*\(",
+                  r"\burl\s*=",
+                  r"t\.me/",
+                  r"telegram\.me/",
+              ],
+              before=10,
+              after=25,
+              max_blocks=40,
+          )
+
+          show_matches(
+              "EXISTING ASTROVIBE NEWS REFERENCES",
+              [
+                  r"AstroVibeOfficial",
+                  r"AstroVibe News",
+                  r"actualités.*AstroVibe",
+                  r"actualites.*AstroVibe",
+                  r"news.*AstroVibe",
+              ],
+              before=12,
+              after=30,
+              max_blocks=25,
+          )
+
+          title("STRUCTURAL SUMMARY")
+
+          all_text = "\n".join(
+              read_file(path)
+              for path in PYTHON_FILES
+          )
+
+          indicators = {
+              "START HANDLER": [
+                  r"CommandHandler\s*\([^,\n]*[\"']start[\"']",
+                  r"\bdef\s+\w*start\w*\s*\(",
+                  r"\basync\s+def\s+\w*start\w*\s*\(",
+              ],
+              "REFERRAL LOGIC": [
+                  r"\bref_",
+                  r"referral",
+                  r"referrer",
+                  r"parrain",
+                  r"filleul",
+              ],
+              "BIRTH ONBOARDING": [
+                  r"birth_request",
+                  r"birth_date",
+                  r"birth_place",
+              ],
+              "USER CREATION": [
+                  r"INSERT\s+INTO\s+(users|utilisateurs)",
+                  r"create_user",
+                  r"save_user",
+                  r"register_user",
+              ],
+              "INLINE KEYBOARD": [
+                  r"InlineKeyboardMarkup",
+                  r"InlineKeyboardButton",
+              ],
+              "URL BUTTON": [
+                  r"InlineKeyboardButton\s*\([^)]*\burl\s*=",
+                  r"\burl\s*=\s*[\"']https?://",
+              ],
+              "ASTROVIBE NEWS REFERENCE": [
+                  r"AstroVibeOfficial",
+                  r"AstroVibe News",
+              ],
+          }
+
+          for label, patterns in indicators.items():
+              detected = any(
+                  re.search(pattern, all_text, re.IGNORECASE | re.DOTALL)
+                  for pattern in patterns
+              )
+
+              status = "YES" if detected else "NOT FOUND"
+              print(f"{label}: {status}")
+
+          title("RECOMMENDED FUTURE INSERTION")
+
+          print(
+              "Chercher en priorité le dernier message envoyé après :"
+          )
+          print("1. l'insertion du nouvel utilisateur ;")
+          print("2. l'enregistrement des données de naissance ;")
+          print("3. l'attribution éventuelle du parrainage ;")
+          print("4. l'affichage du menu principal.")
+          print()
+          print("Le futur bouton devra utiliser :")
+          print("Label FR : 🌌 AstroVibe News")
+          print("Label EN : 🌌 AstroVibe News")
+          print("URL : https://t.me/AstroVibeOfficial")
+          print()
+          print(
+              "Aucune modification n'a été effectuée par cet audit."
+          )
+
+          title("AUDIT COMPLETE")
+
+          print("Intentional failures: 0")
+          print("Repository writes: 0")
+          print("Database writes: 0")
+          print("Telegram messages sent: 0")
+          print("Payments initiated: 0")
+          print("Referral values modified: 0")
+          print("Production behavior modified: 0")
+
+          # Sortie volontairement normale, quels que soient les résultats.
+          raise SystemExit(0)
+          PY
+
+          echo
+          echo "Python audit completed."
+          echo "No intentional failure was requested."
+          true
+
+      - name: Check Python syntax without blocking audit
+        shell: bash
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "NON-BLOCKING PYTHON SYNTAX CHECK"
+          echo "======================================"
+
+          if test -f bot.py; then
+            python -m py_compile bot.py
+
+            if test "$?" -eq 0; then
+              echo "bot.py: COMPILES"
+            else
+              echo "bot.py: COMPILE NOTICE"
+              echo "The workflow will continue."
+            fi
+          else
+            echo "bot.py: NOT FOUND"
+            echo "The workflow will continue."
+          fi
+
+          find . \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} + \
+            2>/dev/null
+
+          find . \
+            -type f \
+            -name "*.pyc" \
+            -delete \
+            2>/dev/null
+
+          echo "Syntax check completed without blocking."
+          true
+
+      - name: Confirm read only status
+        shell: bash
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "READ ONLY STATUS"
+          echo "======================================"
+
+          STATUS="$(git status --porcelain 2>/dev/null)"
+
+          if test -z "$STATUS"; then
+            echo "Repository working tree changes: 0"
+          else
+            echo "NOTICE: temporary workspace differences detected."
+            echo "No commit or push will be performed."
+            echo "$STATUS"
+          fi
+
+          echo
+          echo "Git commit executed: NO"
+          echo "Git push executed: NO"
+          echo "Neon connection used: NO"
+          echo "Telegram API called: NO"
+          echo "Payment API called: NO"
+          echo "Referral data changed: NO"
+
+          true
