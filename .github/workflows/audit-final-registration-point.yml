@@ -1,0 +1,208 @@
+name: Audit Final Registration Point
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Find final registration point
+        shell: bash
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "FINAL REGISTRATION POINT AUDIT"
+          echo "READ ONLY - NO EXIT 1"
+          echo "======================================"
+
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("bot.py")
+
+          if not path.exists():
+              print("bot.py: NOT FOUND")
+              print("Audit terminé sans modification.")
+              raise SystemExit(0)
+
+          lines = path.read_text(
+              encoding="utf-8",
+              errors="replace"
+          ).splitlines()
+
+          # Signaux forts de fin d'inscription uniquement.
+          strong_patterns = [
+              r"INSERT\s+INTO\s+(users|utilisateurs)",
+              r"save_user\s*\(",
+              r"create_user\s*\(",
+              r"register_user\s*\(",
+              r"registration.*complete",
+              r"onboarding.*complete",
+          ]
+
+          # Éléments que nous voulons voir juste après.
+          output_patterns = [
+              r"send_message\s*\(",
+              r"reply_text\s*\(",
+              r"edit_message_text\s*\(",
+              r"reply_markup\s*=",
+              r"InlineKeyboardMarkup",
+              r"InlineKeyboardButton",
+              r"ReplyKeyboardMarkup",
+              r"menu",
+          ]
+
+          # Parrainage, uniquement pour contexte.
+          referral_patterns = [
+              r"referral",
+              r"referrer",
+              r"parrain",
+              r"filleul",
+              r"\+\s*50",
+              r"\+\s*20",
+          ]
+
+          strong_rx = re.compile(
+              "|".join(strong_patterns),
+              re.I
+          )
+
+          output_rx = re.compile(
+              "|".join(output_patterns),
+              re.I
+          )
+
+          referral_rx = re.compile(
+              "|".join(referral_patterns),
+              re.I
+          )
+
+          candidates = []
+
+          for i, line in enumerate(lines):
+              if not strong_rx.search(line):
+                  continue
+
+              start = max(0, i - 15)
+              end = min(len(lines), i + 100)
+
+              context = "\n".join(lines[start:end])
+
+              if output_rx.search(context):
+                  candidates.append(
+                      (i, start, end)
+                  )
+
+          print()
+          print("=== STRONG CANDIDATES ===")
+
+          if not candidates:
+              print("NOT FOUND")
+          else:
+              # Maximum 3 candidats pour garder
+              # une sortie très courte.
+              for number, (match, start, end) \
+                  in enumerate(candidates[:3], 1):
+
+                  print()
+                  print(
+                      f"--- CANDIDATE {number} ---"
+                  )
+                  print("FILE: bot.py")
+                  print(
+                      f"ANCHOR LINE: {match + 1}"
+                  )
+
+                  # On ne montre que les lignes réellement
+                  # intéressantes dans la fenêtre.
+                  shown = 0
+
+                  for idx in range(start, end):
+                      text = lines[idx]
+
+                      interesting = (
+                          idx == match
+                          or strong_rx.search(text)
+                          or output_rx.search(text)
+                          or referral_rx.search(text)
+                      )
+
+                      if not interesting:
+                          continue
+
+                      marker = (
+                          ">>"
+                          if idx == match
+                          else "  "
+                      )
+
+                      print(
+                          f"{marker} {idx + 1:5d}: "
+                          f"{text}"
+                      )
+
+                      shown += 1
+
+                      if shown >= 35:
+                          print(
+                              "... output limited ..."
+                          )
+                          break
+
+          print()
+          print("=== EXISTING NEWS LINK ===")
+
+          news_lines = []
+
+          for i, line in enumerate(lines):
+              if (
+                  "AstroVibeOfficial" in line
+                  or "AstroVibe News" in line
+              ):
+                  news_lines.append(
+                      (i + 1, line)
+                  )
+
+          if news_lines:
+              for number, text in news_lines[:10]:
+                  print(
+                      f"{number}: {text}"
+                  )
+          else:
+              print("NOT FOUND")
+
+          print()
+          print("=== FUTURE BUTTON ===")
+          print("LABEL: 🌌 AstroVibe News")
+          print(
+              "URL: https://t.me/"
+              "AstroVibeOfficial"
+          )
+
+          print()
+          print("=== READ ONLY ===")
+          print("bot.py modified: NO")
+          print("Neon used: NO")
+          print("Telegram API called: NO")
+          print("Payments touched: NO")
+          print("Referral values touched: NO")
+          print("Git commit: NO")
+          print("Git push: NO")
+          print("Intentional failures: 0")
+
+          raise SystemExit(0)
+          PY
+
+          true
